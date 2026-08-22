@@ -1,0 +1,665 @@
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
+import QtQuick.Dialogs
+import KutIcons 1.0
+
+/**
+ * PublishDialog.qml — Diálogo de publicación a KutPod.
+ *
+ * Flujo:
+ *  1. Si no logueado → muestra mini-login.
+ *  2. Si logueado → permite escoger podcast destino + revisar metadata.
+ *  3. Botón "Publicar" ejecuta export-a-temp + upload con barra de progreso.
+ *
+ * Datos pre-rellenados desde ProjectIO.metadata y ChapterModel.
+ */
+Dialog {
+    id: pubDlg
+    title: qsTr("Publicar en KutPod")
+    modal: true
+    width: 640
+    height: 640
+    anchors.centerIn: parent
+    standardButtons: Dialog.NoButton
+
+    // Configuración de exportación (heredada de main.qml)
+    property int prefSampleRate: 48000
+    property real normalizeLUFS: -16.0
+    property string transcriptPath: ""
+
+    // Estado interno
+    property string _selectedPodcastId: ""
+    property string _selectedPodcastName: ""
+    property string _tmpExportPath: ""
+    property int    _progress: 0
+    property string _statusMsg: ""
+    property string _errorMsg: ""
+    property string _episodeUrl: ""
+    property bool   _publishing: false
+
+    function reset() {
+        _selectedPodcastId = ""
+        _selectedPodcastName = ""
+        _tmpExportPath = ""
+        _progress = 0
+        _statusMsg = ""
+        _errorMsg = ""
+        _episodeUrl = ""
+        _publishing = false
+    }
+
+    onOpened: {
+        reset()
+        if (KutPod.loggedIn) KutPod.fetchPodcasts()
+    }
+
+    // ── Pre-rellenar metadata desde el proyecto ──────────────────────
+    function projectMeta() {
+        const m = ProjectIO.metadata || {}
+        return {
+            title:       m.title       || "",
+            description: m.description || "",
+            episode:     m.episode     || 0,
+            season:      m.season      || 1,
+            author:      m.podcaster   || "",
+            publishAt:   m.publishAt   || ""
+        }
+    }
+
+    contentItem: StackView {
+        id: pubStack
+        initialItem: KutPod.loggedIn ? formPage : loginMini
+    }
+
+    // ── Mini-login ──────────────────────────────────────────────────
+    Component {
+        id: loginMini
+        Item {
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: 24
+                spacing: 12
+
+                Label {
+                    text: qsTr("Conecta con KutPod para publicar")
+                    font.pixelSize: 16; font.bold: true
+                    color: palette.text
+                }
+                Label { text: qsTr("URL"); color: palette.text }
+                TextField { id: lu; Layout.fillWidth: true
+                    placeholderText: "https://www.tupodcast.com"
+                    text: KutPod.baseUrl || "https://" }
+                Label { text: qsTr("Usuario"); color: palette.text }
+                TextField { id: lus; Layout.fillWidth: true; text: KutPod.currentUser }
+                Label { text: qsTr("Contraseña"); color: palette.text }
+                TextField { id: lp; Layout.fillWidth: true; echoMode: TextInput.Password }
+                Label {
+                    id: miniErr; color: "#e74c3c"; wrapMode: Text.WordWrap
+                    Layout.fillWidth: true; visible: text !== ""
+                }
+                Item { Layout.fillHeight: true }
+                RowLayout {
+                    Layout.fillWidth: true
+                    Button { text: qsTr("Cancelar"); onClicked: pubDlg.close() }
+                    Item { Layout.fillWidth: true }
+                    BusyIndicator { running: KutPod.busy; visible: KutPod.busy }
+                    Button {
+                        text: qsTr("Iniciar sesión")
+                        highlighted: true
+                        enabled: !KutPod.busy && lu.text.length > 4
+                              && lus.text.length > 0 && lp.text.length > 0
+                        onClicked: {
+                            miniErr.text = ""
+                            KutPod.login(lu.text.trim(), lus.text.trim(), lp.text)
+                        }
+                    }
+                }
+                Connections {
+                    target: KutPod
+                    function onLoginSuccess(user) {
+                        KutPod.fetchPodcasts()
+                        pubStack.replace(formPage)
+                    }
+                    function onLoginFailed(reason) { miniErr.text = reason }
+                }
+            }
+        }
+    }
+
+    // ── Formulario de publicación ───────────────────────────────────
+    Component {
+        id: formPage
+        Item {
+            property var meta: pubDlg.projectMeta()
+
+            ScrollView {
+                anchors.fill: parent
+                anchors.margins: 18
+                contentWidth: availableWidth
+
+                ColumnLayout {
+                    width: parent.width
+                    spacing: 12
+
+                    // Selector de podcast
+                    Label { text: qsTr("Podcast destino"); color: palette.text; font.bold: true }
+                    ComboBox {
+                        id: podcastCombo
+                        Layout.fillWidth: true
+                        model: KutPod.podcasts
+                        textRole: "name"
+                        valueRole: "id"
+                        onActivated: {
+                            pubDlg._selectedPodcastId   = String(podcastCombo.valueAt(currentIndex))
+                            pubDlg._selectedPodcastName = String(podcastCombo.textAt(currentIndex))
+                        }
+                        
+                        function syncSelection() {
+                            var n = podcastCombo.count
+                            if (n === 0) return
+
+                            var localName = ""
+                            var md = ProjectIO.metadata
+                            if (md && md.podcast !== undefined)
+                                localName = String(md.podcast).trim()
+
+                            if (!localName && ProjectIO.currentDisplayName) {
+                                var parts = ProjectIO.currentDisplayName.split("/")
+                                if (parts.length > 1)
+                                    localName = parts[0].trim()
+                            }
+
+                            if (!localName && ProjectIO.currentPath) {
+                                var pp = ProjectIO.currentPath.split("/")
+                                if (pp.length >= 3)
+                                    localName = pp[pp.length - 3].trim()
+                            }
+
+
+                            var targetIdx = 0
+                            if (localName) {
+                                var lower = localName.toLowerCase()
+                                for (var i = 0; i < n; i++) {
+                                    var txt = String(podcastCombo.textAt(i)).trim().toLowerCase()
+                                    if (txt === lower) { targetIdx = i; break }
+                                }
+                                if (targetIdx === 0 && n > 1) {
+                                    for (var j = 0; j < n; j++) {
+                                        var t2 = String(podcastCombo.textAt(j)).trim().toLowerCase()
+                                        if (t2 && (t2.indexOf(lower) !== -1 || lower.indexOf(t2) !== -1)) {
+                                            targetIdx = j; break
+                                        }
+                                    }
+                                }
+                            }
+
+                            podcastCombo.currentIndex = targetIdx
+                            var selectedId = podcastCombo.valueAt(targetIdx)
+                            var selectedName = podcastCombo.textAt(targetIdx)
+
+                            if (selectedId !== undefined && String(selectedId) !== "") {
+                                pubDlg._selectedPodcastId   = String(selectedId)
+                                pubDlg._selectedPodcastName = String(selectedName)
+                            }
+                        }
+                        
+                        Connections {
+                            target: pubDlg
+                            function onAboutToShow() {
+                                syncTimer.restart()
+                            }
+                        }
+                        
+                        Connections {
+                            target: KutPod
+                            function onPodcastsChanged() {
+                                syncTimer.restart()
+                            }
+                        }
+                        
+                        Timer {
+                            id: syncTimer
+                            interval: 150
+                            repeat: true
+                            onTriggered: {
+                                if (podcastCombo.count === 0) return
+                                syncSelection()
+                                if (pubDlg._selectedPodcastId !== "")
+                                    syncTimer.stop()
+                            }
+                        }
+                        
+                        onCountChanged: syncTimer.restart()
+                        Component.onCompleted: syncTimer.restart()
+                    }
+
+                    Rectangle { Layout.fillWidth: true; height: 1; color: palette.mid }
+
+                    // Título
+                    Label { text: qsTr("Título"); color: palette.text }
+                    TextField {
+                        id: titleField
+                        Layout.fillWidth: true
+                        text: meta.title
+                    }
+
+                    // Descripción
+                    Label { text: qsTr("Descripción / notas"); color: palette.text }
+                    ScrollView {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 100
+                        background: Rectangle {
+                            color: "#1f2226"
+                            radius: 4
+                            border.color: "#3d4146"
+                        }
+                        TextArea {
+                            id: descField
+                            objectName: "descField"
+                            text: meta.description
+                            wrapMode: TextArea.Wrap
+                            color: palette.text
+                        }
+                    }
+
+                    GridLayout {
+                        Layout.fillWidth: true
+                        columns: 4
+                        columnSpacing: 12
+                        rowSpacing: 6
+
+                        Label { text: qsTr("Episodio"); color: palette.text }
+                        SpinBox {
+                            id: epField
+                            objectName: "epField"
+                            Layout.fillWidth: true
+                            from: 0; to: 99999
+                            value: meta.episode
+                            enabled: false
+                        }
+                        Label { text: qsTr("Temporada"); color: palette.text }
+                        SpinBox {
+                            id: seasonField
+                            objectName: "seasonField"
+                            Layout.fillWidth: true
+                            from: 0; to: 99
+                            value: meta.season
+                            enabled: false
+                        }
+                    }
+
+                    Label { text: qsTr("Tipo de episodio"); color: palette.text }
+                    ComboBox {
+                        id: epTypeCombo
+                        objectName: "epTypeCombo"
+                        Layout.fillWidth: true
+                        textRole: "text"
+                        valueRole: "value"
+                        model: [
+                            { text: qsTr("Full (Completo)"), value: "full" },
+                            { text: qsTr("Trailer"), value: "trailer" },
+                            { text: qsTr("Bonus (Extra)"), value: "bonus" }
+                        ]
+                        Component.onCompleted: {
+                            var targetType = "full"
+                            if (ProjectIO.metadata && ProjectIO.metadata.episodeType) {
+                                targetType = ProjectIO.metadata.episodeType
+                            }
+                            for (var i = 0; i < model.length; i++) {
+                                if (model[i].value === targetType) {
+                                    currentIndex = i
+                                    break
+                                }
+                            }
+                        }
+                    }
+
+                    Label { text: qsTr("Autor / podcaster"); color: palette.text }
+                    TextField {
+                        id: authorField
+                        objectName: "authorField"
+                        Layout.fillWidth: true
+                        text: meta.author
+                    }
+
+                    Rectangle { Layout.fillWidth: true; height: 1; color: palette.mid }
+
+                    CheckBox {
+                        id: scheduleCheck
+                        objectName: "scheduleCheck"
+                        text: qsTr("Programar publicación")
+                        checked: meta.publishAt && meta.publishAt !== ""
+                    }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        visible: scheduleCheck.checked
+                        spacing: 12
+                        
+                        Label { text: qsTr("Fecha y hora (YYYY-MM-DD HH:MM)"); color: palette.text }
+                        TextField {
+                            id: scheduleField
+                            objectName: "scheduleField"
+                            Layout.fillWidth: true
+                            text: meta.publishAt ? meta.publishAt : (function() {
+                                var d = new Date();
+                                d.setHours(d.getHours() + 1);
+                                return Qt.formatDateTime(d, "yyyy-MM-dd hh:mm");
+                            })()
+                        }
+                    }
+
+                    Rectangle { Layout.fillWidth: true; height: 1; color: palette.mid }
+
+                    // Resumen de extras
+                    Label {
+                        text: qsTr("Adjuntos detectados")
+                        color: palette.text; font.bold: true
+                    }
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 4
+                        RowLayout {
+                            Text {
+                                text: ChapterModel.count > 0 ? "✓" : "—"
+                                color: ChapterModel.count > 0 ? "#2ecc71" : palette.placeholderText
+                                font.bold: true; font.pixelSize: 14
+                            }
+                            Label {
+                                color: palette.text
+                                text: ChapterModel.count > 0
+                                    ? qsTr("%1 capítulos (con imágenes locales se suben al servidor)").arg(ChapterModel.count)
+                                    : qsTr("Sin capítulos")
+                            }
+                        }
+                        RowLayout {
+                            Text {
+                                text: pubDlg.transcriptPath !== "" ? "✓" : "—"
+                                color: pubDlg.transcriptPath !== "" ? "#2ecc71" : palette.placeholderText
+                                font.bold: true; font.pixelSize: 14
+                            }
+                            Label {
+                                color: palette.text
+                                text: pubDlg.transcriptPath !== ""
+                                    ? qsTr("Transcripción adjunta: %1").arg(FileHelper.fileName(pubDlg.transcriptPath))
+                                    : qsTr("Sin transcripción")
+                            }
+                        }
+                    }
+                    Button {
+                        text: pubDlg.transcriptPath === ""
+                            ? qsTr("Adjuntar transcripción…")
+                            : qsTr("Cambiar transcripción…")
+                        onClicked: transcriptPicker.open()
+                    }
+                    FileDialog {
+                        id: transcriptPicker
+                        nameFilters: ["Subtítulos (*.srt *.vtt)"]
+                        onAccepted: {
+                            var p = selectedFile.toString()
+                            if (p.startsWith("file://")) p = p.substring(7)
+                            pubDlg.transcriptPath = p
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // ── Pantalla de progreso ────────────────────────────────────────
+    Component {
+        id: progressPage
+        Item {
+            ColumnLayout {
+                anchors.centerIn: parent
+                width: 460
+                spacing: 14
+
+                Label {
+                    text: pubDlg._publishing
+                        ? qsTr("Publicando episodio…")
+                        : (pubDlg._errorMsg !== ""
+                            ? qsTr("Error al publicar")
+                            : qsTr("Publicado correctamente"))
+                    color: pubDlg._errorMsg !== "" ? "#e74c3c" : palette.text
+                    font.pixelSize: 18; font.bold: true
+                    Layout.alignment: Qt.AlignHCenter
+                }
+                Label {
+                    text: pubDlg._statusMsg
+                    color: palette.placeholderText
+                    font.pixelSize: 12
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
+                    horizontalAlignment: Text.AlignHCenter
+                }
+                ProgressBar {
+                    Layout.fillWidth: true
+                    from: 0; to: 100
+                    value: pubDlg._progress
+                    visible: pubDlg._publishing
+                }
+                Label {
+                    visible: pubDlg._errorMsg !== ""
+                    text: pubDlg._errorMsg
+                    color: "#e74c3c"
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
+                }
+                Label {
+                    visible: pubDlg._episodeUrl !== "" && !pubDlg._publishing
+                    text: qsTr("Disponible en: %1").arg(pubDlg._episodeUrl)
+                    color: palette.text
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
+                    horizontalAlignment: Text.AlignHCenter
+                }
+                Item { Layout.preferredHeight: 8 }
+                Button {
+                    Layout.alignment: Qt.AlignHCenter
+                    text: pubDlg._publishing ? qsTr("Cancelar") : qsTr("Cerrar")
+                    onClicked: pubDlg.close()
+                }
+            }
+        }
+    }
+
+    // ── Footer con acción principal (solo en formPage) ───────────────
+    footer: DialogButtonBox {
+        visible: pubStack.currentItem === pubStack.find(item => item === pubStack.currentItem)
+              && !pubDlg._publishing
+              && pubDlg._errorMsg === ""
+              && pubDlg._episodeUrl === ""
+              && KutPod.loggedIn
+        Button {
+            text: qsTr("Cancelar")
+            DialogButtonBox.buttonRole: DialogButtonBox.RejectRole
+            onClicked: pubDlg.close()
+        }
+        Button {
+            text: qsTr("Publicar")
+            highlighted: true
+            DialogButtonBox.buttonRole: DialogButtonBox.AcceptRole
+            enabled: pubDlg._selectedPodcastId !== ""
+            onClicked: pubDlg._startPublish()
+        }
+    }
+
+    // ── Acción: exportar a temp y subir ─────────────────────────────
+    function _startPublish() {
+        const form = pubStack.currentItem
+        if (!form) return
+        // Capturar los campos del form actual
+        const formChildren = form.children
+        // Más sencillo: leer por id directamente vía findChild — no funciona en QML,
+        // así que confiamos en las propiedades expuestas.
+        const titleVal   = _readField("titleField")
+        const descVal    = _readField("descField")
+        const epVal      = _readNumberField("epField")
+        const seasonVal  = _readNumberField("seasonField")
+        const epTypeVal  = _readComboValueField("epTypeCombo")
+        const authorVal  = _readField("authorField")
+        const scheduleVal= _readCheckField("scheduleCheck") ? _readField("scheduleField") : ""
+
+        if (!titleVal || titleVal.trim() === "") {
+            _errorMsg = qsTr("Falta el título del episodio.")
+            pubStack.replace(progressPage)
+            return
+        }
+
+        _publishing = true
+        _progress = 0
+        _statusMsg = qsTr("Exportando MP3 con capítulos…")
+        pubStack.replace(progressPage)
+
+        // Ruta de export temporal
+        const home = FileHelper.homeDir()
+        const tmpDir = home + "/.cache/kut/publish"
+        FileHelper.ensureDir(tmpDir)
+        const safeTitle = titleVal.replace(/[\/\\:*?"<>|]/g, "_")
+        _tmpExportPath = tmpDir + "/" + safeTitle + ".mp3"
+
+        // Metadata para el export (igual que ExportDialog)
+        const metadata = {
+            title:       titleVal,
+            artist:      authorVal,
+            album:       _selectedPodcastName,
+            comment:     descVal,
+            track:       epVal,
+            disc:        seasonVal,
+            podcaster:   authorVal,
+            description: descVal,
+            episode:     epVal,
+            season:      seasonVal
+        }
+
+        const opts = {
+            format:        "mp3",
+            sampleRate:    pubDlg.prefSampleRate,
+            normalizeLUFS: pubDlg.normalizeLUFS,
+            metadata:      metadata
+        }
+
+        const ok = ExportManager.exportWithOptions(_tmpExportPath, opts)
+        if (!ok) {
+            _publishing = false
+            _errorMsg = qsTr("No se pudo exportar: %1").arg(ExportManager.lastError())
+            return
+        }
+        _statusMsg = qsTr("Subiendo a KutPod…")
+
+        // Construir capítulos con paths absolutos para img
+        const chapters = []
+        const chaptersJson = ChapterModel.toJson()
+        for (let i = 0; i < chaptersJson.length; i++) {
+            const c = chaptersJson[i]
+            const localImg = ChapterModel.chapterArtwork(i)
+            if (localImg && localImg !== "")
+                c.img = localImg
+            chapters.push(c)
+        }
+
+        const payload = {
+            title:          titleVal,
+            description:    descVal,
+            author:         authorVal,
+            episodeNumber:  epVal,
+            seasonNumber:   seasonVal,
+            episodeType:    epTypeVal,
+            publishAt:      scheduleVal,
+            audioPath:      _tmpExportPath,
+            coverPath:      ProjectIO.metadata && ProjectIO.metadata.coverPath
+                              ? ProjectIO.metadata.coverPath : "",
+            transcriptPath: pubDlg.transcriptPath,
+            chapters:       chapters
+        }
+        KutPod.publishEpisode(_selectedPodcastId, payload)
+    }
+
+    function _readField(objectName) {
+        // Recorre el árbol del formPage para encontrar el TextField/TextArea por objectName
+        const form = pubStack.currentItem
+        if (!form) return ""
+        // Buscar recursivamente
+        function find(node) {
+            if (!node) return null
+            if (node.objectName === objectName) return node
+            // Si no tiene objectName, intentar por id directamente con findChild no existe.
+            // Recurrir a children + visibleChildren.
+            const c = node.children || []
+            for (let i = 0; i < c.length; i++) {
+                const f = find(c[i])
+                if (f) return f
+            }
+            return null
+        }
+        const t = find(form)
+        return t ? t.text : ""
+    }
+
+    function _readComboValueField(objectName) {
+        const form = pubStack.currentItem
+        if (!form) return "full"
+        function find(node) {
+            if (!node) return null
+            if (node.objectName === objectName) return node
+            const c = node.children || []
+            for (let i = 0; i < c.length; i++) {
+                const f = find(c[i])
+                if (f) return f
+            }
+            return null
+        }
+        const t = find(form)
+        return t ? t.currentValue : "full"
+    }
+
+    function _readNumberField(objectName) {
+        const form = pubStack.currentItem
+        if (!form) return 0
+        function find(node) {
+            if (!node) return null
+            if (node.objectName === objectName) return node
+            const c = node.children || []
+            for (let i = 0; i < c.length; i++) {
+                const f = find(c[i])
+                if (f) return f
+            }
+            return null
+        }
+        const t = find(form)
+        return t ? t.value : 0
+    }
+
+    function _readCheckField(objectName) {
+        const form = pubStack.currentItem
+        if (!form) return false
+        function find(node) {
+            if (!node) return null
+            if (node.objectName === objectName) return node
+            const c = node.children || []
+            for (let i = 0; i < c.length; i++) {
+                const f = find(c[i])
+                if (f) return f
+            }
+            return null
+        }
+        const t = find(form)
+        return t ? t.checked : false
+    }
+
+    // ── Conexiones del cliente ──────────────────────────────────────
+    Connections {
+        target: KutPod
+        function onPublishProgress(percent) { pubDlg._progress = percent }
+        function onPublishFinished(success, url, err) {
+            pubDlg._publishing = false
+            if (success) {
+                pubDlg._episodeUrl = url
+                pubDlg._statusMsg  = qsTr("Episodio publicado.")
+            } else {
+                pubDlg._errorMsg = err
+            }
+        }
+    }
+}

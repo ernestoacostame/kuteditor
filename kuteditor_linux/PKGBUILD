@@ -1,0 +1,35 @@
+pkgname=kuteditor
+pkgver=2.48 
+pkgrel=1
+pkgdesc="Editor de podcast con soporte JACK y Qt6"
+arch=('x86_64')
+url="https://www.kuteditor.com"
+license=('GPL')
+
+# Dependencia genérica para evitar el conflicto con Pipewire
+depends=('qt6-base' 'qt6-declarative' 'jack') 
+makedepends=('cmake' 'ninja')
+
+# Al estar en la carpeta del proyecto, no necesitamos fuentes externas
+source=()
+sha256sums=()
+
+build() {
+    # Usamos $startdir para referenciar donde está el CMakeLists.txt
+    cmake -B build -S "$startdir" \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX=/usr \
+        -DHAVE_WHISPER=OFF \
+        -DHAVE_KUTPOD=ON \
+        -G Ninja
+    cmake --build build
+}
+
+package() {
+    # Instalamos el binario
+    install -Dm755 build/kuteditor "$pkgdir"/usr/bin/kuteditor
+    
+    # Recursos (Icono y Desktop)
+    install -Dm644 "$startdir"/resources/kuteditor.desktop "$pkgdir"/usr/share/applications/kuteditor.desktop
+    install -Dm644 "$startdir"/resources/kuteditor.svg "$pkgdir"/usr/share/icons/hicolor/scalable/apps/kuteditor.svg
+}

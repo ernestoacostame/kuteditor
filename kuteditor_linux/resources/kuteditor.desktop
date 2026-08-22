@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=KUT Editor
+Comment=Editor de podcasts para Linux
+Exec=kuteditor %F
+Icon=kuteditor
+Terminal=false
+Categories=AudioVideo;Audio;AudioVideoEditing;
+MimeType=application/x-podcastproj;
+StartupNotify=true
+StartupWMClass=kuteditor

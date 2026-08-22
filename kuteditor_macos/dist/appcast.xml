@@ -1,0 +1,30 @@
+<?xml version="1.0" standalone="yes"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>kuteditor</title>
+        <item>
+            <title>1.5.7</title>
+            <pubDate>Fri, 24 Jul 2026 16:47:52 -0500</pubDate>
+            <sparkle:version>1.5.7</sparkle:version>
+            <sparkle:shortVersionString>1.5.7</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <enclosure url="https://kuteditor.com/KutEditor-1.5.7.dmg" length="116507244" type="application/octet-stream" sparkle:edSignature="jmcScL7WtWRqyHsD9Gd9prL18YyJmll3egkbn0SsHREuOvVX2XnjPx2KxiXb66jYaJSuGeiMSoH6BVMClGUwDA=="/>
+        </item>
+        <item>
+            <title>1.5.6</title>
+            <pubDate>Thu, 16 Jul 2026 17:05:47 -0500</pubDate>
+            <sparkle:version>1.5.6</sparkle:version>
+            <sparkle:shortVersionString>1.5.6</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <enclosure url="https://kuteditor.com/KutEditor-1.5.6.dmg" length="115093117" type="application/octet-stream" sparkle:edSignature="E7X+3CJ7PwSSJDT/0ozoZehK9dVE9FpHht4Ygc9LCgKoR2OeygvbSHBQ0nAMHnoTLuVkJVfP/8pg+YGI/DV2CA=="/>
+        </item>
+        <item>
+            <title>1.5.4</title>
+            <pubDate>Sat, 11 Jul 2026 09:37:53 -0500</pubDate>
+            <sparkle:version>1.5.4</sparkle:version>
+            <sparkle:shortVersionString>1.5.4</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <enclosure url="https://kuteditor.com/KutEditor-1.5.4.dmg" length="115182756" type="application/octet-stream" sparkle:edSignature="tqVWoYNAcEbOOWaToyRJ7arovlSCZ8gJpOj39/dieDJ0rJITO9ssqEuX8GwsiZbn32+04FsMXAXpufPOlrJ6Dw=="/>
+        </item>
+    </channel>
+</rss>
