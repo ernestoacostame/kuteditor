@@ -1,0 +1,9 @@
+kuteditor (2.48-1) unstable; urgency=medium
+
+  * Initial Debian package, built from the upstream git tree.
+  * Fix the DeepFilterNet library lookup and the executable RPATH, which
+    left the binary pointing at the build directory.
+  * Report 2.48 as the application version instead of 2.37.
+  * Depend on pipewire-jack in preference to a standalone JACK server.
+
+ -- Sergi Perich <info@soploslinux.com>  Sun, 23 Aug 2026 18:20:00 +0200

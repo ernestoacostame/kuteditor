@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
-project(kuteditor VERSION 2.48  LANGUAGES C CXX)
-set(CPACK_PACKAGE_VERSION "2.37")
+project(kuteditor VERSION 2.48 LANGUAGES C CXX)
+set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -164,13 +164,13 @@ endif()
 # ---------------------------------------------------------------------------
 option(HAVE_DEEPFILTERNET "Activar soporte para DeepFilterNet" ON)
 if(HAVE_DEEPFILTERNET)
-    add_compile_definitions(HAVE_DEEPFILTERNET)
-    message(STATUS "DeepFilterNet habilitado: reducción de ruido avanzada")
     # Buscar libdeepfilter.so en 3rdparty/deepfilternet/
-    find_library(DEEPFILTER_LIB NAMES deepfilter PATHS ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/deepfilternet/ NO_DEFAULT_PATH)
+    find_library(DEEPFILTER_LIB NAMES deepfilter libdeepfilter.so.0.5 PATHS ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/deepfilternet/ NO_DEFAULT_PATH)
     if(DEEPFILTER_LIB)
-        message(STATUS "Librería libdeepfilter encontrada: ${DEEPFILTER_LIB}")
+        add_compile_definitions(HAVE_DEEPFILTERNET)
+        message(STATUS "DeepFilterNet habilitado: reducción de ruido avanzada (${DEEPFILTER_LIB})")
     else()
+        set(HAVE_DEEPFILTERNET OFF)
         message(WARNING "libdeepfilter NO encontrada. Descarga la release de GitHub y colócala en 3rdparty/deepfilternet/")
     endif()
 else()
@@ -329,6 +329,12 @@ target_include_directories(kuteditor PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
+set_target_properties(kuteditor PROPERTIES
+    INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib/kuteditor"
+    BUILD_WITH_INSTALL_RPATH FALSE
+    SKIP_BUILD_RPATH FALSE
+)
+
 target_link_libraries(kuteditor
     PRIVATE
     Qt6::Core
@@ -383,9 +389,8 @@ install(FILES resources/kuteditor.svg DESTINATION share/icons/hicolor/scalable/a
 
 if(HAVE_DEEPFILTERNET AND DEEPFILTER_LIB)
     install(FILES 
-        ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/deepfilternet/libdeepfilter.so
         ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/deepfilternet/libdeepfilter.so.0.5 
-        DESTINATION lib
+        DESTINATION lib/kuteditor
     )
 endif()
 
@@ -398,7 +403,7 @@ set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Editor de podcast con soporte JACK y Qt6"
 set(CPACK_PACKAGE_VENDOR "KutEditor")
 set(CPACK_PACKAGE_CONTACT "support@kuteditor.com")
 
-set(CPACK_DEBIAN_PACKAGE_DEPENDS "jackd2 | jackd, libtag1v5, libsamplerate0")
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "pipewire-jack | jackd2, libtag2 | libtag1v5, libsamplerate0, librnnoise0")
 set(CPACK_RPM_PACKAGE_REQUIRES "jack-audio-connection-kit, taglib, libsamplerate")
 
 include(CPack)

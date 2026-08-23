@@ -1,0 +1,22 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@ --buildsystem=cmake
+
+override_dh_auto_configure:
+	dh_auto_configure -- \
+		-DCMAKE_BUILD_TYPE=Release \
+		-DHAVE_WHISPER=OFF \
+		-DHAVE_KUTPOD=ON \
+		-DHAVE_DEEPFILTERNET=ON
+
+# libdeepfilter.so.0.5 is a prebuilt private library with no shlibs data of
+# its own. Point dh_shlibdeps at the directory it is installed into so the
+# executable resolves against it instead of failing.
+override_dh_shlibdeps:
+	dh_shlibdeps -l$(CURDIR)/debian/kuteditor/usr/lib/kuteditor \
+		-- --ignore-missing-info
+
+# The bundled library is not built from source here, so it carries no
+# debug symbols to separate out.
+override_dh_dwz:
