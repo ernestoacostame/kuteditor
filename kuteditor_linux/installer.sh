@@ -69,7 +69,6 @@ if [ -f "PKGBUILD" ] && [ -f "CMakeLists.txt" ]; then
     if [ -n "$PKGBUILD_VER" ]; then
         echo "Sincronizando versión de PKGBUILD ($PKGBUILD_VER) con CMakeLists.txt..."
         sed -i -E "s/(project\(kuteditor VERSION )[0-9.]+( LANGUAGES C CXX)/\1$PKGBUILD_VER\2/g" CMakeLists.txt
-        sed -i -E "s/(set\(CPACK_PACKAGE_VERSION \")[0-9.]+(\"\)/\1$PKGBUILD_VER\2/g" CMakeLists.txt
     else
         echo "Advertencia: No se pudo detectar la versión en PKGBUILD."
     fi

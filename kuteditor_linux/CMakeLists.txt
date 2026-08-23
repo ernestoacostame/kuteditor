@@ -7,14 +7,13 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 
 # ---------------------------------------------------------------------------
-# Qt6 (obligatorio)
+# Qt6 (obligatorio, Qt >= 6.7 para QRhi público)
 # ---------------------------------------------------------------------------
-find_package(Qt6 REQUIRED COMPONENTS
+find_package(Qt6 6.7 REQUIRED COMPONENTS
     Core
     Quick
     QuickControls2
     Gui
-    GuiPrivate
     Widgets
     Concurrent
     ShaderTools
@@ -341,7 +340,6 @@ target_link_libraries(kuteditor
     Qt6::Quick
     Qt6::QuickControls2
     Qt6::Gui
-    Qt6::GuiPrivate
     Qt6::Widgets
     Qt6::Concurrent
     Qt6::ShaderTools
@@ -404,6 +402,7 @@ set(CPACK_PACKAGE_VENDOR "KutEditor")
 set(CPACK_PACKAGE_CONTACT "support@kuteditor.com")
 
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "pipewire-jack | jackd2, libtag2 | libtag1v5, libsamplerate0, librnnoise0")
-set(CPACK_RPM_PACKAGE_REQUIRES "jack-audio-connection-kit, taglib, libsamplerate")
+set(CPACK_RPM_PACKAGE_REQUIRES "pipewire-jack-audio-connection-kit, taglib, libsamplerate, rnnoise")
+set(CPACK_RPM_PACKAGE_LICENSE "GPL-3.0-or-later")
 
 include(CPack)

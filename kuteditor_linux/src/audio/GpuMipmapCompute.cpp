@@ -6,7 +6,7 @@
 #include <QVulkanInstance>
 #include <QElapsedTimer>
 
-#include <rhi/qrhi.h>
+#include <QtGui/qrhi.h>
 
 // ─── Singleton ───
 

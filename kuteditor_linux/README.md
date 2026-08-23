@@ -12,14 +12,35 @@ KutEditor es el entorno nativo de escritorio para creadores de podcasts de la su
 
 ## Despliegue e Instalación
 
-KutEditor provee scripts de instalación nativa (como `installer.sh`) y scripts de generación de empaquetados para distribuciones Linux (`PKGBUILD`, RPM, DEB vía CPack), garantizando una instalación profesional que incluye íconos de sistema, entradas de menú y un ejecutable estandarizado (`kuteditor`).
+KutEditor provee herramientas y scripts para diferentes distribuciones Linux:
+
+* **Arch Linux / Manjaro / CachyOS**: Compilación e instalación nativa con `PKGBUILD` (`makepkg -si`) o mediante `installer.sh`.
+* **Debian / Ubuntu / Derivadas**: Generación de paquete fuente y binario `.deb` nativo mediante `compiler.sh` (`./compiler.sh`) o instalación rápida con `installer.sh`.
+* **Fedora / RPM**: Empaquetado RPM mediante CPack (`cpack -G RPM`) o `installer.sh`.
+
+### Compilación de paquete .deb para Debian/Ubuntu
+
+Para generar un paquete `.deb` estándar con todas las dependencias resueltas:
+
+```bash
+./compiler.sh
+```
+
+Esto generará el paquete `kuteditor_<VERSION>-1_amd64.deb` listo para instalar con:
+
+```bash
+sudo apt install ./kuteditor_*.deb
+```
 
 > [!NOTE]
 > **Compatibilidad de Audio (JACK y PipeWire)**:
 > KutEditor utiliza la API de JACK para la reproducción y grabación de audio. 
-> - Si tu distribución utiliza **PipeWire** por defecto (como Arch Linux, CachyOS, Fedora, Ubuntu reciente, etc.), asegúrate de instalar el paquete de compatibilidad **`pipewire-jack`** (este reemplazará a `jack2`).
+> - Si tu distribución utiliza **PipeWire** por defecto (como Arch Linux, CachyOS, Fedora, Debian 12+, Ubuntu 23+), asegúrate de instalar el paquete de compatibilidad **`pipewire-jack`**.
 > - Si utilizas un servidor **JACK2** tradicional, asegúrate de iniciar el servidor JACK antes de ejecutar la aplicación.
 
+## Licencia
+
+Este proyecto está licenciado bajo los términos de la **GNU General Public License v3.0 (GPL-3.0-or-later)**. Consulta el archivo [LICENSE](LICENSE) para más detalles.
 
 ## Parte de KutStudio
 

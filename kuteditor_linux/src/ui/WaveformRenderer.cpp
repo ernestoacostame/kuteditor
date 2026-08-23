@@ -3,7 +3,7 @@
 #include "WaveformItem.h"
 #include "audio/AudioMipmap.h"
 
-#include <rhi/qrhi.h>
+#include <QtGui/qrhi.h>
 #include <QFile>
 #include <QDebug>
 #include <QQuickWindow>

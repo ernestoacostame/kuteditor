@@ -1,6 +1,6 @@
 #include "GpuWaveformCompute.h"
 
-#include <rhi/qrhi.h>
+#include <QtGui/qrhi.h>
 #include <QFile>
 #include <QDebug>
 #include <cstring>
