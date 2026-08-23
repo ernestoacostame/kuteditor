@@ -3,7 +3,15 @@
 #include "WaveformItem.h"
 #include "audio/AudioMipmap.h"
 
+#if __has_include(<rhi/qrhi.h>)
+#include <rhi/qrhi.h>
+#elif __has_include(<QtGui/rhi/qrhi.h>)
+#include <QtGui/rhi/qrhi.h>
+#elif __has_include(<QtGui/qrhi.h>)
 #include <QtGui/qrhi.h>
+#else
+#include <QtGui/private/qrhi_p.h>
+#endif
 #include <QFile>
 #include <QDebug>
 #include <QQuickWindow>

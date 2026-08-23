@@ -1,5 +1,5 @@
 pkgname=kuteditor
-pkgver=2.48 
+pkgver=2.49
 pkgrel=1
 pkgdesc="Editor de podcast con soporte JACK y Qt6"
 arch=('x86_64')

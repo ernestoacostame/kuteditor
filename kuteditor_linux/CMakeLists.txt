@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(kuteditor VERSION 2.48 LANGUAGES C CXX)
+project(kuteditor VERSION 2.49 LANGUAGES C CXX)
 set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
 
 set(CMAKE_CXX_STANDARD 17)
@@ -7,13 +7,15 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 
 # ---------------------------------------------------------------------------
-# Qt6 (obligatorio, Qt >= 6.7 para QRhi público)
+# Qt6 (obligatorio, Qt >= 6.7 para QRhi)
 # ---------------------------------------------------------------------------
+set(QT_NO_PRIVATE_MODULE_WARNING ON)
 find_package(Qt6 6.7 REQUIRED COMPONENTS
     Core
     Quick
     QuickControls2
     Gui
+    GuiPrivate
     Widgets
     Concurrent
     ShaderTools
@@ -340,6 +342,7 @@ target_link_libraries(kuteditor
     Qt6::Quick
     Qt6::QuickControls2
     Qt6::Gui
+    Qt6::GuiPrivate
     Qt6::Widgets
     Qt6::Concurrent
     Qt6::ShaderTools
