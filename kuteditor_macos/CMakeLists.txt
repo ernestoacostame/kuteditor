@@ -11,7 +11,8 @@ set(CMAKE_AUTOMOC ON)
 # ---------------------------------------------------------------------------
 # Qt6 (obligatorio)
 # ---------------------------------------------------------------------------
-find_package(Qt6 REQUIRED COMPONENTS
+set(QT_NO_PRIVATE_MODULE_WARNING ON)
+find_package(Qt6 6.7 REQUIRED COMPONENTS
     Core
     Quick
     QuickControls2

@@ -3,6 +3,14 @@
     <channel>
         <title>kuteditor</title>
         <item>
+            <title>1.5.12</title>
+            <pubDate>Sat, 15 Aug 2026 20:38:59 -0500</pubDate>
+            <sparkle:version>1.5.12</sparkle:version>
+            <sparkle:shortVersionString>1.5.12</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <enclosure url="https://kuteditor.com/KutEditor-1.5.12.dmg" length="115596654" type="application/octet-stream" sparkle:edSignature="GavoRLYju18q7Hdps5UBq/IbFWausLHd4nL4M331Ng1+uXYnxnXPn0HmH3/zXVTVW6Nwad2EB9Nnw7XjfaF9Bw=="/>
+        </item>
+        <item>
             <title>1.5.7</title>
             <pubDate>Fri, 24 Jul 2026 16:47:52 -0500</pubDate>
             <sparkle:version>1.5.7</sparkle:version>
@@ -17,14 +25,6 @@
             <sparkle:shortVersionString>1.5.6</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             <enclosure url="https://kuteditor.com/KutEditor-1.5.6.dmg" length="115093117" type="application/octet-stream" sparkle:edSignature="E7X+3CJ7PwSSJDT/0ozoZehK9dVE9FpHht4Ygc9LCgKoR2OeygvbSHBQ0nAMHnoTLuVkJVfP/8pg+YGI/DV2CA=="/>
-        </item>
-        <item>
-            <title>1.5.4</title>
-            <pubDate>Sat, 11 Jul 2026 09:37:53 -0500</pubDate>
-            <sparkle:version>1.5.4</sparkle:version>
-            <sparkle:shortVersionString>1.5.4</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
-            <enclosure url="https://kuteditor.com/KutEditor-1.5.4.dmg" length="115182756" type="application/octet-stream" sparkle:edSignature="tqVWoYNAcEbOOWaToyRJ7arovlSCZ8gJpOj39/dieDJ0rJITO9ssqEuX8GwsiZbn32+04FsMXAXpufPOlrJ6Dw=="/>
         </item>
     </channel>
 </rss>

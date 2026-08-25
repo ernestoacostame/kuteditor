@@ -3,7 +3,7 @@
 #include <QColor>
 #include <QVector>
 
-// Forward declarations — QRhi types from Qt::GuiPrivate
+// Forward declarations — QRhi types from QtGui (Qt >= 6.7)
 QT_BEGIN_NAMESPACE
 class QRhi;
 class QRhiBuffer;
