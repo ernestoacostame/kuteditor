@@ -204,8 +204,6 @@ void AudioMipmap::calculateMipmaps() {
             {
                 QMutexLocker lock(&m_mutex);
                 m_levels = std::move(newLevels);
-                m_samples.clear();
-                m_samples.squeeze();
                 m_ready = true;
             }
             qDebug() << "[AudioMipmap] GPU path:" << timer.elapsed() << "ms |"
@@ -265,8 +263,6 @@ void AudioMipmap::calculateMipmaps() {
     {
         QMutexLocker lock(&m_mutex);
         m_levels = std::move(newLevels);
-        m_samples.clear();
-        m_samples.squeeze();
         m_ready = true;
     }
     qDebug() << "[AudioMipmap] CPU path:" << timer.elapsed() << "ms |"
@@ -285,7 +281,16 @@ AudioPeak AudioMipmap::getRawPeak(qint64 start, qint64 end, int channel) const {
         data = m_samples.constData();
     }
 
-    if (!data) return {0, 0};
+    if (!data) {
+        if (!m_levels.isEmpty() && m_levels[0].blockSize > 0) {
+            qint64 b = start / m_levels[0].blockSize;
+            qint64 idx = b * m_channels + channel;
+            if (idx >= 0 && idx < m_levels[0].peaks.size()) {
+                return m_levels[0].peaks[idx];
+            }
+        }
+        return {0, 0};
+    }
 
     // Clamp to valid range
     if (end > m_totalFrames) end = m_totalFrames;

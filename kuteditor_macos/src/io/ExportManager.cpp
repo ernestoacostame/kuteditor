@@ -702,18 +702,37 @@ bool ExportManager::writeWavFile(const QString &filePath, const QVector<float> &
 // ============================================================================
 //  ffmpeg (subproceso)
 // ============================================================================
-bool ExportManager::exportViaFfmpeg(const QString &filePath, const QVector<float> &samples,
-                                    int sampleRate, int channels, const QString &format,
-                                    const QVariantMap &metadata)
-{
-    // Detectar ffmpeg en PATH o embebido.
+static QString findFfmpegExecutable() {
     QString ffmpegPath = QCoreApplication::applicationDirPath() + "/ffmpeg";
 #ifdef Q_OS_WIN
     ffmpegPath += ".exe";
 #endif
-    if (!QFile::exists(ffmpegPath)) {
-        ffmpegPath = QStandardPaths::findExecutable("ffmpeg");
+    if (QFile::exists(ffmpegPath)) {
+        return ffmpegPath;
     }
+
+#ifdef Q_OS_MAC
+    const QStringList macPaths = {
+        "/opt/homebrew/bin/ffmpeg",
+        "/usr/local/bin/ffmpeg",
+        "/opt/local/bin/ffmpeg"
+    };
+    for (const QString &path : macPaths) {
+        if (QFile::exists(path)) {
+            return path;
+        }
+    }
+#endif
+
+    return QStandardPaths::findExecutable("ffmpeg");
+}
+
+bool ExportManager::exportViaFfmpeg(const QString &filePath, const QVector<float> &samples,
+                                    int sampleRate, int channels, const QString &format,
+                                    const QVariantMap &metadata)
+{
+    // Detectar ffmpeg en PATH, embebido o en rutas del sistema (Homebrew, etc.).
+    QString ffmpegPath = findFfmpegExecutable();
 
     if (ffmpegPath.isEmpty()) {
         m_lastError = tr("ffmpeg no encontrado. Instala ffmpeg o coloca el binario en la carpeta de la aplicación para exportar a %1.")
@@ -1105,12 +1124,5 @@ bool ExportManager::exportViaCoreAudio(const QString &filePath, const QVector<fl
 
 bool ExportManager::isFfmpegAvailable() const
 {
-    QString ffmpegPath = QCoreApplication::applicationDirPath() + "/ffmpeg";
-#ifdef Q_OS_WIN
-    ffmpegPath += ".exe";
-#endif
-    if (QFile::exists(ffmpegPath)) {
-        return true;
-    }
-    return !QStandardPaths::findExecutable("ffmpeg").isEmpty();
+    return !findFfmpegExecutable().isEmpty();
 }

@@ -5,6 +5,7 @@
 #include "transcription/RNNoiseWorker.h"
 
 #include <QColor>
+#include <QCoreApplication>
 #include <QtConcurrent>
 #include <QPointer>
 #include <QDataStream>
@@ -3618,6 +3619,124 @@ bool TrackModel::noiseReduce(int trackIndex, int clipIndex, float reductionDb,
   return true;
 }
 
+static QString findFfmpegExecutable() {
+  QString ffmpegPath = QCoreApplication::applicationDirPath() + "/ffmpeg";
+#ifdef Q_OS_WIN
+  ffmpegPath += ".exe";
+#endif
+  if (QFile::exists(ffmpegPath)) {
+    return ffmpegPath;
+  }
+
+#ifdef Q_OS_MAC
+  const QStringList macPaths = {
+      "/opt/homebrew/bin/ffmpeg",
+      "/usr/local/bin/ffmpeg",
+      "/opt/local/bin/ffmpeg"
+  };
+  for (const QString &path : macPaths) {
+    if (QFile::exists(path)) {
+      return path;
+    }
+  }
+#endif
+
+  return QStandardPaths::findExecutable("ffmpeg");
+}
+
+#if defined(Q_OS_MAC) || defined(HAVE_COREAUDIO)
+static bool readAudioFile_CoreAudio(const QString &path, QVector<float> &outSamples,
+                                    int &outSampleRate, int &outChannels) {
+  CFURLRef fileURL = QUrl::fromLocalFile(path).toCFURL();
+  if (!fileURL) return false;
+
+  ExtAudioFileRef audioFile = nullptr;
+  OSStatus status = ExtAudioFileOpenURL(fileURL, &audioFile);
+  CFRelease(fileURL);
+
+  if (status != noErr || !audioFile) {
+    qWarning() << "[CoreAudio] ExtAudioFileOpenURL falló para:" << path << "status:" << status;
+    return false;
+  }
+
+  AudioStreamBasicDescription fileFormat;
+  UInt32 propSize = sizeof(fileFormat);
+  status = ExtAudioFileGetProperty(audioFile, kExtAudioFileProperty_FileDataFormat, &propSize, &fileFormat);
+  if (status != noErr) {
+    qWarning() << "[CoreAudio] ExtAudioFileGetProperty FileDataFormat falló:" << status;
+    ExtAudioFileDispose(audioFile);
+    return false;
+  }
+
+  outSampleRate = (fileFormat.mSampleRate > 0) ? int(fileFormat.mSampleRate) : 48000;
+  outChannels = (fileFormat.mChannelsPerFrame > 0) ? int(fileFormat.mChannelsPerFrame) : 2;
+
+  AudioStreamBasicDescription clientFormat = {};
+  clientFormat.mSampleRate = outSampleRate;
+  clientFormat.mFormatID = kAudioFormatLinearPCM;
+  clientFormat.mFormatFlags = kAudioFormatFlagIsFloat | kAudioFormatFlagIsPacked;
+  clientFormat.mBitsPerChannel = 32;
+  clientFormat.mChannelsPerFrame = outChannels;
+  clientFormat.mBytesPerFrame = 4 * outChannels;
+  clientFormat.mFramesPerPacket = 1;
+  clientFormat.mBytesPerPacket = clientFormat.mBytesPerFrame;
+
+  status = ExtAudioFileSetProperty(audioFile, kExtAudioFileProperty_ClientDataFormat,
+                                   sizeof(clientFormat), &clientFormat);
+  if (status != noErr) {
+    qWarning() << "[CoreAudio] ExtAudioFileSetProperty ClientDataFormat falló:" << status;
+    ExtAudioFileDispose(audioFile);
+    return false;
+  }
+
+  SInt64 totalFrames = 0;
+  propSize = sizeof(totalFrames);
+  status = ExtAudioFileGetProperty(audioFile, kExtAudioFileProperty_FileLengthFrames,
+                                   &propSize, &totalFrames);
+  if (status != noErr || totalFrames <= 0) {
+    qWarning() << "[CoreAudio] ExtAudioFileGetProperty FileLengthFrames falló:" << status << "totalFrames:" << totalFrames;
+    ExtAudioFileDispose(audioFile);
+    return false;
+  }
+
+  outSamples.resize(totalFrames * outChannels);
+
+  constexpr UInt32 CHUNK_FRAMES = 32768;
+  UInt32 framesReadTotal = 0;
+
+  AudioBufferList bufferList;
+  bufferList.mNumberBuffers = 1;
+  bufferList.mBuffers[0].mNumberChannels = outChannels;
+
+  while (framesReadTotal < UInt32(totalFrames)) {
+    UInt32 framesToRead = std::min(CHUNK_FRAMES, UInt32(totalFrames) - framesReadTotal);
+    bufferList.mBuffers[0].mDataByteSize = framesToRead * outChannels * sizeof(float);
+    bufferList.mBuffers[0].mData = outSamples.data() + (framesReadTotal * outChannels);
+
+    UInt32 framesReadThisChunk = framesToRead;
+    status = ExtAudioFileRead(audioFile, &framesReadThisChunk, &bufferList);
+    if (status != noErr) {
+      qWarning() << "[CoreAudio] Error leyendo frames:" << status;
+      break;
+    }
+    if (framesReadThisChunk == 0) break;
+    framesReadTotal += framesReadThisChunk;
+  }
+
+  ExtAudioFileDispose(audioFile);
+
+  if (framesReadTotal == 0) {
+    qWarning() << "[CoreAudio] 0 frames leídos.";
+    return false;
+  }
+
+  outSamples.resize(framesReadTotal * outChannels);
+  qDebug() << "[CoreAudio] Decodificado exitoso:" << framesReadTotal << "frames ("
+           << outChannels << "ch," << outSampleRate << "Hz) de:" << path;
+  return true;
+}
+#endif
+
 static bool readAudioFile_WAV(const QString &path, QVector<float> &outSamples,
                               int &outSampleRate, int &outChannels) {
   QFile f(path);
@@ -3774,10 +3893,16 @@ bool TrackModel::importAudioFile(int trackIndex, const QString &filePath,
       ok = readAudioFile_WAV(resolvedPath, samples, sr, ch);
     }
 
+#if defined(Q_OS_MAC) || defined(HAVE_COREAUDIO)
     if (!ok) {
-      const QString ffmpegPath = QStandardPaths::findExecutable("ffmpeg");
+      ok = readAudioFile_CoreAudio(resolvedPath, samples, sr, ch);
+    }
+#endif
+
+    if (!ok) {
+      const QString ffmpegPath = findFfmpegExecutable();
       if (ffmpegPath.isEmpty()) {
-        qWarning() << "[Import] ffmpeg no encontrado en PATH; solo WAV soportado.";
+        qWarning() << "[Import] ffmpeg no encontrado; solo WAV o decodificación nativa soportada.";
         return;
       }
 

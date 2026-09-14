@@ -939,6 +939,16 @@ ApplicationWindow {
     function zoomOut() { root.timelineZoom = Math.max(0.25, root.timelineZoom / 1.25) }
     function zoomReset() { root.timelineZoom = 1.0; root.timelineScrollX = 0 }
     function openChapterEditor() { chapterEditorDialog.open() }
+    function openCustomFadeDialog(trackIndex, clipIndex, isFadeIn) {
+        customFadeDialog.trackIndex = trackIndex
+        customFadeDialog.clipIndex = clipIndex
+        customFadeDialog.isFadeIn = isFadeIn
+        const curSec = isFadeIn 
+            ? TrackModel.clipFadeInSec(trackIndex, clipIndex)
+            : TrackModel.clipFadeOutSec(trackIndex, clipIndex)
+        customFadeDialog.currentSec = curSec > 0 ? curSec : 0.5
+        customFadeDialog.open()
+    }
     function zoomToFit() {
         // Calcular el zoom necesario para que todo el audio quepa en el viewport.
         const total = AudioEngine.totalTime || 0
@@ -1295,6 +1305,89 @@ ApplicationWindow {
         }
         onRejected: { pendingAction = "" }
     }
+
+    Dialog {
+        id: customFadeDialog
+        title: isFadeIn ? qsTr("Ajustar Fade In") : qsTr("Ajustar Fade Out")
+        modal: true
+        anchors.centerIn: parent
+        width: 360
+        standardButtons: Dialog.Ok | Dialog.Cancel
+
+        property int trackIndex: -1
+        property int clipIndex: -1
+        property bool isFadeIn: true
+        property real currentSec: 0.5
+
+        onOpened: {
+            fadeSecField.text = currentSec.toFixed(2)
+            fadeSecField.selectAll()
+            fadeSecField.forceActiveFocus()
+        }
+
+        onAccepted: {
+            const val = parseFloat(fadeSecField.text)
+            if (isNaN(val) || val < 0) return
+            if (isFadeIn) {
+                const curOut = TrackModel.clipFadeOutSec(trackIndex, clipIndex)
+                UndoManager.setClipFades(trackIndex, clipIndex, val, curOut)
+            } else {
+                const curIn = TrackModel.clipFadeInSec(trackIndex, clipIndex)
+                UndoManager.setClipFades(trackIndex, clipIndex, curIn, val)
+            }
+        }
+
+        contentItem: ColumnLayout {
+            spacing: 12
+            Label {
+                text: customFadeDialog.isFadeIn
+                    ? qsTr("Duración del Fade In (segundos):")
+                    : qsTr("Duración del Fade Out (segundos):")
+                color: root.textPri
+                font.bold: true
+            }
+            RowLayout {
+                spacing: 6
+                Layout.fillWidth: true
+                Button {
+                    text: "- 0.5s"
+                    onClicked: {
+                        let v = Math.max(0, (parseFloat(fadeSecField.text) || 0) - 0.5)
+                        fadeSecField.text = v.toFixed(2)
+                    }
+                }
+                Button {
+                    text: "- 0.1s"
+                    onClicked: {
+                        let v = Math.max(0, (parseFloat(fadeSecField.text) || 0) - 0.1)
+                        fadeSecField.text = v.toFixed(2)
+                    }
+                }
+                TextField {
+                    id: fadeSecField
+                    Layout.fillWidth: true
+                    inputMethodHints: Qt.ImhFormattedNumbersOnly
+                    selectByMouse: true
+                    onAccepted: customFadeDialog.accept()
+                }
+                Button {
+                    text: "+ 0.1s"
+                    onClicked: {
+                        let v = (parseFloat(fadeSecField.text) || 0) + 0.1
+                        fadeSecField.text = v.toFixed(2)
+                    }
+                }
+                Button {
+                    text: "+ 0.5s"
+                    onClicked: {
+                        let v = (parseFloat(fadeSecField.text) || 0) + 0.5
+                        fadeSecField.text = v.toFixed(2)
+                    }
+                }
+            }
+        }
+    }
+
     Window {
         id: errorDialog
         title: qsTr("Error")

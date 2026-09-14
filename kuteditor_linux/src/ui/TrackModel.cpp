@@ -5,6 +5,7 @@
 #include "transcription/RNNoiseWorker.h"
 
 #include <QColor>
+#include <QCoreApplication>
 #include <QtConcurrent>
 #include <QPointer>
 #include <QDataStream>
@@ -3821,6 +3822,17 @@ bool TrackModel::noiseReduce(int trackIndex, int clipIndex, float reductionDb,
   return true;
 }
 
+static QString findFfmpegExecutable() {
+  QString ffmpegPath = QCoreApplication::applicationDirPath() + "/ffmpeg";
+#ifdef Q_OS_WIN
+  ffmpegPath += ".exe";
+#endif
+  if (QFile::exists(ffmpegPath)) {
+    return ffmpegPath;
+  }
+  return QStandardPaths::findExecutable("ffmpeg");
+}
+
 // Lee un WAV float32 o PCM int16/int24 a float. Simple, en el mismo módulo
 // para evitar dependencia cruzada con ProjectIO.
 static bool readAudioFile_WAV(const QString &path, QVector<float> &outSamples,
@@ -3992,7 +4004,7 @@ bool TrackModel::importAudioFile(int trackIndex, const QString &filePath,
     // Fallback: si falla WAV nativo o no es WAV, usar ffmpeg para decodificar
     // a un WAV temporal float32 estéreo 48kHz y leerlo.
     if (!ok) {
-      const QString ffmpegPath = QStandardPaths::findExecutable("ffmpeg");
+      const QString ffmpegPath = findFfmpegExecutable();
       if (ffmpegPath.isEmpty()) {
         qWarning() << "[Import] ffmpeg no encontrado en PATH; solo WAV soportado.";
         return;

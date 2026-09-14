@@ -85,6 +85,20 @@ Rectangle {
     // Índice del clip sobre el que se hizo right-click (menú contextual).
     property int contextClipIndex: -1
 
+    function setFadeInPreset(sec) {
+        const ci = trackRoot.contextClipIndex
+        if (ci < 0) return
+        const curOut = TrackModel.clipFadeOutSec(trackRoot.trackIndex, ci)
+        UndoManager.setClipFades(trackRoot.trackIndex, ci, sec, curOut)
+    }
+
+    function setFadeOutPreset(sec) {
+        const ci = trackRoot.contextClipIndex
+        if (ci < 0) return
+        const curIn = TrackModel.clipFadeInSec(trackRoot.trackIndex, ci)
+        UndoManager.setClipFades(trackRoot.trackIndex, ci, curIn, sec)
+    }
+
     // Estado del Shift+drag para selección de región por-pista.
     property bool _regionDragging: false
     property real _regionDragSec: 0
@@ -2064,10 +2078,6 @@ Rectangle {
                                 clipRect.isGainModified || 
                                 mouseZone.containsMouse || 
                                 mouseZone.pressedInside || 
-                                fadeInHandle.containsMouse || 
-                                fadeInHandle.pressed || 
-                                fadeOutHandle.containsMouse || 
-                                fadeOutHandle.pressed || 
                                 gainHandle.containsMouse || 
                                 gainHandle.pressed
                             )
@@ -2204,142 +2214,7 @@ Rectangle {
                             }
                         }
 
-                        // --- Fade In handle ---
-                        // MouseArea z:50 gana sobre mouseZone z:20.
-                        // (trackRegionMA z:80 ya no existe.)
-                        MouseArea {
-                            id: fadeInHandle
-                            anchors.top: parent.top
-                            anchors.topMargin: clipRect.chapterHeaderHeight
-                            height: Math.min(30, parent.height - clipRect.chapterHeaderHeight)
-                            anchors.left: parent.left
-                            width: Math.max(22, clipRect.fadeInPx + 12)
-                            visible: (modelData.envelope || []).length === 0
-                            z: 50
-                            hoverEnabled: true
-                            cursorShape: Qt.SizeHorCursor
 
-                            property real startMouseX: 0
-                            property real startFadeSec: 0
-
-                            opacity: (clipRect._liveFadeInSec > 0 || containsMouse || pressed) ? 1.0 : 0.0
-                            Behavior on opacity { NumberAnimation { duration: 150 } }
-
-                            // Indicador visual (línea vertical + nodo superior)
-                            Rectangle {
-                                x: clipRect.fadeInPx
-                                y: clipRect.chapterHeaderHeight
-                                height: clipRect.height - clipRect.chapterHeaderHeight
-                                width: fadeInHandle.pressed ? 2 : 1
-                                color: Qt.rgba(1, 1, 1, 0.3)
-                            }
-                            Rectangle {
-                                x: clipRect.fadeInPx - width / 2
-                                y: clipRect.gainY - height / 2
-                                width: 10
-                                height: 10
-                                radius: 5
-                                color: fadeInHandle.containsMouse || fadeInHandle.pressed
-                                    ? "#ffffff" : Qt.rgba(1, 1, 1, 0.8)
-                                border.color: "#000"
-                                border.width: 1
-                                opacity: 0.9
-                            }
-
-                            onPressed: (mouse) => {
-                                startMouseX = mapToItem(clipRect, mouse.x, 0).x
-                                startFadeSec = clipRect._liveFadeInSec
-                            }
-                            onPositionChanged: (mouse) => {
-                                if (!pressed) return
-                                const currentX = mapToItem(clipRect, mouse.x, 0).x
-                                const clipLenSec = modelData.lengthSec || 0
-                                const pxPerSec = clipLenSec > 0
-                                    ? clipRect.width / clipLenSec : 0
-                                if (pxPerSec <= 0) return
-                                const dx = currentX - startMouseX
-                                let newFade = startFadeSec + dx / pxPerSec
-                                newFade = Math.max(0, Math.min(newFade,
-                                    clipLenSec - clipRect._liveFadeOutSec))
-                                clipRect._liveFadeInSec = newFade
-                            }
-                            onReleased: {
-                                const oldIn  = modelData.fadeInSec || 0
-                                const newIn  = clipRect._liveFadeInSec
-                                const curOut = modelData.fadeOutSec || 0
-                                if (Math.abs(oldIn - newIn) > 1e-4) {
-                                    UndoManager.setClipFades(trackRoot.trackIndex,
-                                        clipRect.index, newIn, curOut)
-                                }
-                            }
-                        }
-
-                        // --- Fade Out handle ---
-                        MouseArea {
-                            id: fadeOutHandle
-                            anchors.top: parent.top
-                            anchors.topMargin: clipRect.chapterHeaderHeight
-                            height: Math.min(30, parent.height - clipRect.chapterHeaderHeight)
-                            anchors.right: parent.right
-                            width: Math.max(22, clipRect.fadeOutPx + 12)
-                            visible: (modelData.envelope || []).length === 0
-                            z: 50
-                            hoverEnabled: true
-                            cursorShape: Qt.SizeHorCursor
-
-                            property real startMouseX: 0
-                            property real startFadeSec: 0
-
-                            opacity: (clipRect._liveFadeOutSec > 0 || containsMouse || pressed) ? 1.0 : 0.0
-                            Behavior on opacity { NumberAnimation { duration: 150 } }
-
-                            Rectangle {
-                                x: fadeOutHandle.width - clipRect.fadeOutPx
-                                y: clipRect.chapterHeaderHeight
-                                height: clipRect.height - clipRect.chapterHeaderHeight
-                                width: fadeOutHandle.pressed ? 2 : 1
-                                color: Qt.rgba(1, 1, 1, 0.3)
-                            }
-                            Rectangle {
-                                x: fadeOutHandle.width - clipRect.fadeOutPx - width / 2
-                                y: clipRect.gainY - height / 2
-                                width: 10
-                                height: 10
-                                radius: 5
-                                color: fadeOutHandle.containsMouse || fadeOutHandle.pressed
-                                    ? "#ffffff" : Qt.rgba(1, 1, 1, 0.8)
-                                border.color: "#000"
-                                border.width: 1
-                                opacity: 0.9
-                            }
-
-                            onPressed: (mouse) => {
-                                startMouseX = mapToItem(clipRect, mouse.x, 0).x
-                                startFadeSec = clipRect._liveFadeOutSec
-                            }
-                            onPositionChanged: (mouse) => {
-                                if (!pressed) return
-                                const currentX = mapToItem(clipRect, mouse.x, 0).x
-                                const clipLenSec = modelData.lengthSec || 0
-                                const pxPerSec = clipLenSec > 0
-                                    ? clipRect.width / clipLenSec : 0
-                                if (pxPerSec <= 0) return
-                                const dx = currentX - startMouseX
-                                let newFade = startFadeSec - dx / pxPerSec
-                                newFade = Math.max(0, Math.min(newFade,
-                                    clipLenSec - clipRect._liveFadeInSec))
-                                clipRect._liveFadeOutSec = newFade
-                            }
-                            onReleased: {
-                                const oldOut = modelData.fadeOutSec || 0
-                                const newOut = clipRect._liveFadeOutSec
-                                const curIn  = modelData.fadeInSec || 0
-                                if (Math.abs(oldOut - newOut) > 1e-4) {
-                                    UndoManager.setClipFades(trackRoot.trackIndex,
-                                        clipRect.index, curIn, newOut)
-                                }
-                            }
-                        }
 
                         // --- Gain handle ---
                         MouseArea {
@@ -2736,7 +2611,7 @@ Rectangle {
                     const ci = trackRoot.contextClipIndex
                     const clip = (ci >= 0 && ci < clipsModel.count) ? clipsModel.get(ci) : null
                     const fi = clip ? (clip.fadeInSec || 0) : 0
-                    return fi > 0 ? qsTr("Quitar Fade In") : qsTr("Fade In")
+                    return fi > 0 ? qsTr("Quitar Fade In (%1 s)").arg(fi.toFixed(2)) : qsTr("Fade In (0.50 s)")
                 }
                 enabled: trackRoot.contextClipIndex >= 0
                 onTriggered: {
@@ -2748,12 +2623,52 @@ Rectangle {
                     UndoManager.setClipFades(trackRoot.trackIndex, ci, newIn, curOut)
                 }
             }
+            Platform.Menu {
+                title: qsTr("Ajustar Fade In")
+                enabled: trackRoot.contextClipIndex >= 0
+                Platform.MenuItem {
+                    text: "0.10 s"
+                    onTriggered: trackRoot.setFadeInPreset(0.10)
+                }
+                Platform.MenuItem {
+                    text: "0.25 s"
+                    onTriggered: trackRoot.setFadeInPreset(0.25)
+                }
+                Platform.MenuItem {
+                    text: "0.50 s"
+                    onTriggered: trackRoot.setFadeInPreset(0.50)
+                }
+                Platform.MenuItem {
+                    text: "1.00 s"
+                    onTriggered: trackRoot.setFadeInPreset(1.00)
+                }
+                Platform.MenuItem {
+                    text: "2.00 s"
+                    onTriggered: trackRoot.setFadeInPreset(2.00)
+                }
+                Platform.MenuItem {
+                    text: "3.00 s"
+                    onTriggered: trackRoot.setFadeInPreset(3.00)
+                }
+                Platform.MenuItem {
+                    text: "5.00 s"
+                    onTriggered: trackRoot.setFadeInPreset(5.00)
+                }
+                Platform.MenuSeparator {}
+                Platform.MenuItem {
+                    text: qsTr("Personalizado...")
+                    onTriggered: {
+                        const ci = trackRoot.contextClipIndex
+                        if (ci >= 0) appRoot.openCustomFadeDialog(trackRoot.trackIndex, ci, true)
+                    }
+                }
+            }
             Platform.MenuItem {
                 text: {
                     const ci = trackRoot.contextClipIndex
                     const clip = (ci >= 0 && ci < clipsModel.count) ? clipsModel.get(ci) : null
                     const fo = clip ? (clip.fadeOutSec || 0) : 0
-                    return fo > 0 ? qsTr("Quitar Fade Out") : qsTr("Fade Out")
+                    return fo > 0 ? qsTr("Quitar Fade Out (%1 s)").arg(fo.toFixed(2)) : qsTr("Fade Out (0.50 s)")
                 }
                 enabled: trackRoot.contextClipIndex >= 0
                 onTriggered: {
@@ -2763,6 +2678,46 @@ Rectangle {
                     const curOut = TrackModel.clipFadeOutSec(trackRoot.trackIndex, ci)
                     const newOut = curOut > 0 ? 0.0 : 0.5
                     UndoManager.setClipFades(trackRoot.trackIndex, ci, curIn, newOut)
+                }
+            }
+            Platform.Menu {
+                title: qsTr("Ajustar Fade Out")
+                enabled: trackRoot.contextClipIndex >= 0
+                Platform.MenuItem {
+                    text: "0.10 s"
+                    onTriggered: trackRoot.setFadeOutPreset(0.10)
+                }
+                Platform.MenuItem {
+                    text: "0.25 s"
+                    onTriggered: trackRoot.setFadeOutPreset(0.25)
+                }
+                Platform.MenuItem {
+                    text: "0.50 s"
+                    onTriggered: trackRoot.setFadeOutPreset(0.50)
+                }
+                Platform.MenuItem {
+                    text: "1.00 s"
+                    onTriggered: trackRoot.setFadeOutPreset(1.00)
+                }
+                Platform.MenuItem {
+                    text: "2.00 s"
+                    onTriggered: trackRoot.setFadeOutPreset(2.00)
+                }
+                Platform.MenuItem {
+                    text: "3.00 s"
+                    onTriggered: trackRoot.setFadeOutPreset(3.00)
+                }
+                Platform.MenuItem {
+                    text: "5.00 s"
+                    onTriggered: trackRoot.setFadeOutPreset(5.00)
+                }
+                Platform.MenuSeparator {}
+                Platform.MenuItem {
+                    text: qsTr("Personalizado...")
+                    onTriggered: {
+                        const ci = trackRoot.contextClipIndex
+                        if (ci >= 0) appRoot.openCustomFadeDialog(trackRoot.trackIndex, ci, false)
+                    }
                 }
             }
             Platform.MenuItem {

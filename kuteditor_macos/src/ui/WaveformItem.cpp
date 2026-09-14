@@ -535,10 +535,10 @@ QSGNode *WaveformItem::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *) 
                 double globalX = globalOrigin + px;
                 double alignedX = std::floor(globalX);
                 vx = float(alignedX - globalOrigin);
-                double pxFromClipStart = alignedX - (m_clipTimelineStart / secPerPx);
-                t0 = m_clipSourceOffset + pxFromClipStart * m_secPerPixel;
+                double pxFromClipStart = alignedX - (clipStartSec / secPerPx);
+                t0 = clipSourceOffset + pxFromClipStart * m_secPerPixel;
             } else {
-                t0 = m_clipSourceOffset + px * secPerPx;
+                t0 = clipSourceOffset + px * secPerPx;
             }
 
             if (t0 >= clipEndT) {
@@ -551,7 +551,7 @@ QSGNode *WaveformItem::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *) 
 
             float g = m_gain;
             if (m_numEnvNodes > 0) {
-                g *= rmsEnvLookup.gainAt(float(t0 - m_clipSourceOffset));
+                g *= rmsEnvLookup.gainAt(float(t0 - clipSourceOffset));
             }
 
             float absMax = std::max(std::abs(peak.max * g), std::abs(peak.min * g));
