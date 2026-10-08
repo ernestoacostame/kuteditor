@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
-project(kuteditor VERSION 1.5.13 LANGUAGES C CXX)
-set(CPACK_PACKAGE_VERSION "1.5.13")
+project(kuteditor VERSION 1.5.16 LANGUAGES C CXX)
+set(CPACK_PACKAGE_VERSION "1.5.16")
 
 set(CMAKE_OSX_DEPLOYMENT_TARGET "15.0" CACHE STRING "Minimum macOS version" FORCE)
 
@@ -249,8 +249,8 @@ if(APPLE)
     set(MACOSX_ICON "${CMAKE_CURRENT_SOURCE_DIR}/resources/kuteditor.icns")
     set_source_files_properties(${MACOSX_ICON} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
 
-    list(APPEND SOURCES src/SparkleUpdater.mm)
-    list(APPEND HEADERS src/SparkleUpdater.h)
+    list(APPEND SOURCES src/SparkleUpdater.mm src/audio/MacPermissions.mm)
+    list(APPEND HEADERS src/SparkleUpdater.h src/audio/MacPermissions.h)
 
     set(MACOSX_BUNDLE_EXECUTABLE_NAME "kuteditor")
     set(MACOSX_BUNDLE_ICON_FILE "kuteditor.icns")
@@ -269,6 +269,7 @@ if(APPLE)
     set_target_properties(kuteditor PROPERTIES
         MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_BINARY_DIR}/Info.plist"
         MACOSX_BUNDLE_ICON_FILE "kuteditor.icns"
+        XCODE_ATTRIBUTE_CODE_SIGN_ENTITLEMENTS "${CMAKE_CURRENT_SOURCE_DIR}/src/kuteditor.entitlements"
         XCODE_ATTRIBUTE_OTHER_CODE_SIGN_FLAGS "--deep"
     )
 else()
@@ -401,11 +402,13 @@ if(APPLE)
     find_library(COREAUDIO_LIBRARY CoreAudio REQUIRED)
     find_library(AUDIOTOOLBOX_LIBRARY AudioToolbox REQUIRED)
     find_library(AUDIOUNIT_LIBRARY AudioUnit REQUIRED)
+    find_library(AVFOUNDATION_LIBRARY AVFoundation REQUIRED)
     target_include_directories(kuteditor PRIVATE /opt/homebrew/include)
     target_link_libraries(kuteditor PRIVATE
         ${COREAUDIO_LIBRARY}
         ${AUDIOTOOLBOX_LIBRARY}
         ${AUDIOUNIT_LIBRARY}
+        ${AVFOUNDATION_LIBRARY}
         "${SPARKLE_FRAMEWORK_PATH}"
     )
 

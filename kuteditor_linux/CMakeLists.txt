@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(kuteditor VERSION 2.51 LANGUAGES C CXX)
+project(kuteditor VERSION 2.53 LANGUAGES C CXX)
 set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
 
 set(CMAKE_CXX_STANDARD 17)

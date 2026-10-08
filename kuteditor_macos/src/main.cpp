@@ -12,6 +12,7 @@
 
 #include "audio/AudioEngine.h"
 #include "audio/CoreAudioManager.h"
+#include "audio/MacPermissions.h"
 #include "ui/TrackModel.h"
 #include "ui/UndoManager.h"
 #include "ui/WaveformItem.h"  // FORCE REBUILD v2 — geometryChange + textureSize + Image render target
@@ -197,6 +198,7 @@ int main(int argc, char *argv[])
     QObject::connect(transcription, &TranscriptionManager::transcriptionStateChanged,
                      projectIO, &ProjectIO::markDirty);
 
+    MacPermissions::requestMicrophoneAccess();
     if (!coreAudioManager->start()) {
         qWarning() << "[main] CoreAudio no disponible. La app arranca pero Record/Play no harán nada.";
     }

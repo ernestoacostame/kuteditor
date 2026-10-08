@@ -1,5 +1,6 @@
 #include "CoreAudioManager.h"
 #include "AudioEngine.h"
+#include "MacPermissions.h"
 #include "ui/TrackModel.h"
 
 #include <QDebug>
@@ -111,6 +112,8 @@ struct CoreAudioManager::InputDeviceConnection {
     AudioBufferList *bufferList = nullptr;
     AudioBufferList *resampledBufferList = nullptr;
     int channels = 0;
+    UInt32 bufferCapacityBytes = 0;
+    UInt32 resampledCapacityBytes = 0;
 
     // Estado del resampler
     bool needsResampling = false;
@@ -122,23 +125,35 @@ struct CoreAudioManager::InputDeviceConnection {
 static OSStatus inputCallback(void *inRefCon,
                               AudioUnitRenderActionFlags *ioActionFlags,
                               const AudioTimeStamp *inTimeStamp,
-                              UInt32 inBusNumber,
+                              UInt32 /*inBusNumber*/,
                               UInt32 inNumberFrames,
                               AudioBufferList * /*ioData*/)
 {
     auto *conn = static_cast<CoreAudioManager::InputDeviceConnection*>(inRefCon);
     if (!conn || !conn->manager || !conn->unit) return noErr;
-    
+
+    const UInt32 requiredSize = inNumberFrames * sizeof(float);
+
     // Asegurar que el bufferList temporal es lo suficientemente grande
-    for (int i = 0; i < conn->channels; ++i) {
-        UInt32 requiredSize = inNumberFrames * sizeof(float);
-        if (conn->bufferList->mBuffers[i].mDataByteSize < requiredSize) {
-            conn->bufferList->mBuffers[i].mData = std::realloc(conn->bufferList->mBuffers[i].mData, requiredSize);
-            conn->bufferList->mBuffers[i].mDataByteSize = requiredSize;
+    if (requiredSize > conn->bufferCapacityBytes) {
+        conn->bufferCapacityBytes = requiredSize * 2;
+        for (int i = 0; i < conn->channels; ++i) {
+            conn->bufferList->mBuffers[i].mData = std::realloc(conn->bufferList->mBuffers[i].mData, conn->bufferCapacityBytes);
         }
     }
-    
-    OSStatus err = AudioUnitRender(conn->unit, ioActionFlags, inTimeStamp, inBusNumber, inNumberFrames, conn->bufferList);
+
+    // Restablecer la topología del buffer en cada ciclo antes del render
+    conn->bufferList->mNumberBuffers = conn->channels;
+    for (int i = 0; i < conn->channels; ++i) {
+        conn->bufferList->mBuffers[i].mNumberChannels = 1;
+        conn->bufferList->mBuffers[i].mDataByteSize = requiredSize;
+    }
+
+    // IMPORTANTE: En AUHAL, el bus de entrada de hardware es SIEMPRE el Bus 1.
+    // El argumento inBusNumber del callback suele llegar como 0 porque el callback
+    // se registró en el scope global (elemento 0). Si se pasa 0 a AudioUnitRender,
+    // intentará renderizar desde el bus de salida (que está deshabilitado) y fallará con error.
+    OSStatus err = AudioUnitRender(conn->unit, ioActionFlags, inTimeStamp, 1, inNumberFrames, conn->bufferList);
     if (err != noErr) {
         static int errCount = 0;
         errCount++;
@@ -148,11 +163,11 @@ static OSStatus inputCallback(void *inRefCon,
     } else {
         if (conn->needsResampling && conn->resampledBufferList) {
             uint32_t maxOutputFrames = static_cast<uint32_t>(std::ceil(inNumberFrames / conn->timeRatio)) + 2;
-            for (int i = 0; i < conn->channels; ++i) {
-                uint32_t requiredSize = maxOutputFrames * sizeof(float);
-                if (conn->resampledBufferList->mBuffers[i].mDataByteSize < requiredSize) {
-                    conn->resampledBufferList->mBuffers[i].mData = std::realloc(conn->resampledBufferList->mBuffers[i].mData, requiredSize);
-                    conn->resampledBufferList->mBuffers[i].mDataByteSize = requiredSize;
+            const UInt32 requiredResampledSize = maxOutputFrames * sizeof(float);
+            if (requiredResampledSize > conn->resampledCapacityBytes) {
+                conn->resampledCapacityBytes = requiredResampledSize * 2;
+                for (int i = 0; i < conn->channels; ++i) {
+                    conn->resampledBufferList->mBuffers[i].mData = std::realloc(conn->resampledBufferList->mBuffers[i].mData, conn->resampledCapacityBytes);
                 }
             }
 
@@ -186,6 +201,7 @@ static OSStatus inputCallback(void *inRefCon,
 
             conn->resampledBufferList->mNumberBuffers = conn->channels;
             for (int c = 0; c < conn->channels; ++c) {
+                conn->resampledBufferList->mBuffers[c].mNumberChannels = 1;
                 conn->resampledBufferList->mBuffers[c].mDataByteSize = outputFrames * sizeof(float);
             }
 
@@ -778,23 +794,26 @@ void CoreAudioManager::startInputDeviceIfNeeded(const QString &deviceId)
     conn->resamplePhase = 0.0;
     conn->lastSamples.fill(0.0f, numChannels);
 
+    conn->bufferCapacityBytes = 4096 * sizeof(float);
     conn->bufferList = (AudioBufferList *)std::malloc(sizeof(AudioBufferList) + (numChannels - 1) * sizeof(AudioBuffer));
     conn->bufferList->mNumberBuffers = numChannels;
     for (int i = 0; i < numChannels; ++i) {
         conn->bufferList->mBuffers[i].mNumberChannels = 1;
-        conn->bufferList->mBuffers[i].mDataByteSize = 1024 * sizeof(float);
-        conn->bufferList->mBuffers[i].mData = std::malloc(1024 * sizeof(float));
+        conn->bufferList->mBuffers[i].mDataByteSize = conn->bufferCapacityBytes;
+        conn->bufferList->mBuffers[i].mData = std::malloc(conn->bufferCapacityBytes);
     }
 
     if (conn->needsResampling) {
+        conn->resampledCapacityBytes = 4096 * sizeof(float);
         conn->resampledBufferList = (AudioBufferList *)std::malloc(sizeof(AudioBufferList) + (numChannels - 1) * sizeof(AudioBuffer));
         conn->resampledBufferList->mNumberBuffers = numChannels;
         for (int i = 0; i < numChannels; ++i) {
             conn->resampledBufferList->mBuffers[i].mNumberChannels = 1;
-            conn->resampledBufferList->mBuffers[i].mDataByteSize = 1024 * sizeof(float);
-            conn->resampledBufferList->mBuffers[i].mData = std::malloc(1024 * sizeof(float));
+            conn->resampledBufferList->mBuffers[i].mDataByteSize = conn->resampledCapacityBytes;
+            conn->resampledBufferList->mBuffers[i].mData = std::malloc(conn->resampledCapacityBytes);
         }
     } else {
+        conn->resampledCapacityBytes = 0;
         conn->resampledBufferList = nullptr;
     }
 
@@ -1125,6 +1144,7 @@ void CoreAudioManager::processOutput(void *ioData, uint32_t frames)
 void CoreAudioManager::onTrackArmed(int trackIndex, bool armed)
 {
     if (armed) {
+        MacPermissions::requestMicrophoneAccess();
         if (m_trackModel) {
             const auto data = m_trackModel->getTrackData(trackIndex);
             const QString devId = data.value("inputDevice").toString();

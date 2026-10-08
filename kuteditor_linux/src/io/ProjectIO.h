@@ -32,6 +32,7 @@ class ProjectIO : public QObject
     Q_PROPERTY(QString currentDisplayName READ currentDisplayName NOTIFY currentPathChanged)
     Q_PROPERTY(bool isDirty READ isDirty NOTIFY dirtyChanged)
     Q_PROPERTY(QVariantMap metadata READ metadata WRITE setMetadata NOTIFY metadataChanged)
+    Q_PROPERTY(bool hasRecoveryProject READ hasRecoveryProject NOTIFY hasRecoveryChanged)
 public:
     explicit ProjectIO(QObject *parent = nullptr);
     ~ProjectIO();
@@ -73,6 +74,7 @@ signals:
     void metadataChanged();
     void projectLoaded();
     void projectSaved();
+    void hasRecoveryChanged();
 
 private slots:
     void onModelMutated();

@@ -962,28 +962,8 @@ void TrackModel::writeSamplesAt(int index, qint64 startFrame,
 
         invalidateFlatCache(t);
       }
-    } else {
-      // Caso 2: sin grabación activa (poco habitual). Creamos un source
-      // y clip nuevos para este chunk.
-      AudioSource src;
-      src.sampleRate = sampleRate;
-      src.channels = channels;
-      src.samplesVec().resize(nFrames * channels);
-      std::memcpy(src.samplesVec().data(), interleaved,
-                  sizeof(float) * nFrames * channels);
-      updateSourcePeaksInRange(src, 0, nFrames);
-
-      Clip c;
-      c.sourceIdx = t.sources.size();
-      c.timelineStart = startFrame;
-      c.sourceOffset = 0;
-      c.length = nFrames;
-      c.gain = 1.0f;
-
-      t.sources.append(src);
-      t.clips.append(c);
-      invalidateFlatCache(t);
     }
+    // Si la grabación no está activa (o ya finalizó), descartar buffers sobrantes en tránsito.
   }
 
   emit trackPeaksUpdated(index);

@@ -962,6 +962,7 @@ void ProjectIO::saveRecoveryBackup()
         f.write(jsonBytes);
         f.close();
         qDebug() << "[ProjectIO] project_recovery.json written successfully. Size:" << jsonBytes.size();
+        emit hasRecoveryChanged();
     } else {
         qWarning() << "[ProjectIO] Failed to write project_recovery.json to" << jsonPath;
     }
@@ -1031,6 +1032,7 @@ void ProjectIO::discardRecovery()
     if (dir.exists()) {
         dir.removeRecursively();
     }
+    emit hasRecoveryChanged();
 }
 
 bool ProjectIO::updateProjectPathAndTitle(const QString &oldProjPath, const QString &newProjPath, const QString &newTitle)

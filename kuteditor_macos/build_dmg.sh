@@ -56,8 +56,8 @@ fi
 
 python3 "${SCRIPT_DIR}/fix_dependencies.py" kuteditor.app
 
-echo "=== 6. Firmando la aplicación (Ad-hoc) ==="
-codesign --force --deep --sign - kuteditor.app
+echo "=== 6. Firmando la aplicación (Ad-hoc con entitlements) ==="
+codesign --force --deep --options runtime --entitlements "${SCRIPT_DIR}/src/kuteditor.entitlements" --sign - kuteditor.app
 
 echo "=== 7. Creando el instalador DMG ==="
 hdiutil create -volname "KutEditor" -srcfolder kuteditor.app -ov -format UDZO "${OUT_DMG}"

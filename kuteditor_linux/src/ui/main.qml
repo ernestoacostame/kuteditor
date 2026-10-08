@@ -2119,7 +2119,7 @@ ApplicationWindow {
                     }
                     Platform.MenuItem {
                         text: qsTr("Recuperar sesión no guardada…")
-                        enabled: ProjectIO.hasRecoveryProject()
+                        enabled: ProjectIO.hasRecoveryProject
                         onTriggered: recoveryDialog.open()
                     }
                     Platform.MenuSeparator {}
@@ -2315,7 +2315,7 @@ ApplicationWindow {
             }
             IntegratedMenuItem {
                 text: qsTr("Recuperar sesión no guardada…")
-                enabled: ProjectIO.hasRecoveryProject()
+                enabled: ProjectIO.hasRecoveryProject
                 onTriggered: recoveryDialog.open()
             }
             IntegratedMenuSeparator {}

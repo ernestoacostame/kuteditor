@@ -366,7 +366,7 @@ Rectangle {
                         height: 52
                         radius: 8
                         color: "#d35400"
-                        visible: ProjectIO.hasRecoveryProject()
+                        visible: ProjectIO.hasRecoveryProject
 
                         RowLayout {
                             anchors.fill: parent
@@ -386,14 +386,14 @@ Rectangle {
                                 text: qsTr("Recuperar audio")
                                 palette.buttonText: "#d35400"
                                 palette.button: "#ffffff"
-                                onClicked: lib.recoverSessionRequested()
+                                onClicked: confirmRecoverDialog.open()
                             }
 
                             Button {
                                 text: qsTr("Descartar copia")
                                 flat: true
                                 palette.buttonText: "#f1c40f"
-                                onClicked: ProjectIO.discardRecovery()
+                                onClicked: confirmDiscardDialog.open()
                             }
                         }
                     }
@@ -1089,6 +1089,86 @@ Rectangle {
                 Button {
                     text: qsTr("Cancelar")
                     onClicked: renameEpisodeDialog.close()
+                }
+            }
+        }
+    }
+
+    // --- Diálogo: Confirmar recuperación de sesión ---
+    Dialog {
+        id: confirmRecoverDialog
+        title: qsTr("Recuperar sesión no guardada")
+        anchors.centerIn: parent
+        modal: true
+        standardButtons: Dialog.NoButton
+        width: 380
+
+        contentItem: Column {
+            spacing: 16
+            padding: 16
+
+            Label {
+                text: qsTr("¿Estás seguro de que deseas recuperar la sesión de grabación no guardada?")
+                color: palette.text
+                wrapMode: Text.WordWrap
+                width: parent.width - 32
+            }
+
+            Row {
+                spacing: 8
+                anchors.right: parent.right
+                anchors.rightMargin: 16
+                Button {
+                    text: qsTr("Sí, recuperar")
+                    onClicked: {
+                        confirmRecoverDialog.close()
+                        lib.recoverSessionRequested()
+                    }
+                }
+                Button {
+                    text: qsTr("Cancelar")
+                    onClicked: confirmRecoverDialog.close()
+                }
+            }
+        }
+    }
+
+    // --- Diálogo: Confirmar descartar copia de seguridad ---
+    Dialog {
+        id: confirmDiscardDialog
+        title: qsTr("Descartar copia de seguridad")
+        anchors.centerIn: parent
+        modal: true
+        standardButtons: Dialog.NoButton
+        width: 380
+
+        contentItem: Column {
+            spacing: 16
+            padding: 16
+
+            Label {
+                text: qsTr("¿Estás seguro de que deseas descartar la copia de seguridad no guardada?\n\nEsta acción no se puede deshacer.")
+                color: palette.text
+                wrapMode: Text.WordWrap
+                width: parent.width - 32
+            }
+
+            Row {
+                spacing: 8
+                anchors.right: parent.right
+                anchors.rightMargin: 16
+                Button {
+                    text: qsTr("Sí, descartar")
+                    palette.buttonText: "white"
+                    palette.button: "#c0392b"
+                    onClicked: {
+                        confirmDiscardDialog.close()
+                        ProjectIO.discardRecovery()
+                    }
+                }
+                Button {
+                    text: qsTr("Cancelar")
+                    onClicked: confirmDiscardDialog.close()
                 }
             }
         }

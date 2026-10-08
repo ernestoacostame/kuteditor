@@ -243,8 +243,10 @@ void AudioEngine::stop()
 
     if (prev == State::Recording) {
         int maxFramesRec = 0;
+        qint64 startFrameRec = 0;
         {
             QMutexLocker lock(&m_recordMutex);
+            startFrameRec = m_recordStartFrame;
             for (auto it = m_recordFramesWritten.constBegin();
                  it != m_recordFramesWritten.constEnd(); ++it) {
                 maxFramesRec = std::max(maxFramesRec, it.value());
@@ -260,6 +262,12 @@ void AudioEngine::stop()
             m_totalTime = double(maxFrames) / SAMPLE_RATE;
             emit totalTimeChanged();
         }
+
+        const qint64 finalFrame = startFrameRec + maxFramesRec;
+        m_playheadFrame.store(finalFrame, std::memory_order_relaxed);
+        m_currentTime = double(finalFrame) / SAMPLE_RATE;
+        emit timeChanged();
+
         qDebug() << "[AudioEngine] Record STOP: máximo" << maxFramesRec << "frames esta toma";
         emit recordingStopped(maxFramesRec);
     } else if (prev == State::Playing) {
@@ -777,13 +785,13 @@ void AudioEngine::playbackMix(float *out, int nFrames)
     // Avanzar playhead con posible wrap por loop.
     // Con rate > 1 consumimos más frames del source por cada bloque de output.
     qint64 newPlayhead;
-    if (m_state == State::Playing) {
+    if (m_state == State::Playing || m_state == State::Recording) {
         qint64 current = m_playheadFrame.load(std::memory_order_relaxed);
         qint64 loopStart = m_loopStartFrame.load(std::memory_order_relaxed);
         qint64 loopEnd = m_loopEndFrame.load(std::memory_order_relaxed);
         while (true) {
             qint64 target = current + sourceAdvance;
-            if (loopEnd > loopStart && target >= loopEnd) {
+            if (m_state == State::Playing && loopEnd > loopStart && target >= loopEnd) {
                 target = loopStart;
             }
             if (m_playheadFrame.compare_exchange_weak(current, target, std::memory_order_relaxed)) {
