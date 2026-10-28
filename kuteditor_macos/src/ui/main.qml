@@ -2701,7 +2701,11 @@ ApplicationWindow {
             width: 2
             anchors.top: timelineRuler.top
             anchors.bottom: timelineScroll.bottom
-            visible: trackListView.count > 0
+            visible: {
+                if (trackListView.count === 0) return false
+                const vx = root.secToViewX(AudioEngine.currentTime)
+                return (vx >= -10) && (vx <= (timelineScroll.width - root.clipAreaLeftPx + 10))
+            }
             z: 999
             color: root.accent
             opacity: 0.9
@@ -2709,7 +2713,82 @@ ApplicationWindow {
             x: {
                 const vx = root.secToViewX(AudioEngine.currentTime)
                 const px = root.clipAreaLeftPx + vx
-                return Math.max(root.clipAreaLeftPx - 1, Math.min(timelineScroll.width - 2, px - 1))
+                return px - 1
+            }
+
+            // Tirador / Handle estilo Audacity en la regla superior
+            Item {
+                id: playheadHandle
+                width: 16
+                height: 16
+                anchors.horizontalCenter: parent.horizontalCenter
+                y: 11
+                z: 1000
+
+                Canvas {
+                    id: handleCanvas
+                    anchors.fill: parent
+                    renderTarget: Canvas.Image
+                    onPaint: {
+                        const ctx = getContext("2d")
+                        ctx.reset()
+                        const w = width
+                        const h = height
+                        const r = 3
+                        const tipH = 5
+
+                        ctx.beginPath()
+                        ctx.moveTo(r, 0.5)
+                        ctx.lineTo(w - r, 0.5)
+                        ctx.arcTo(w - 0.5, 0.5, w - 0.5, r, r)
+                        ctx.lineTo(w - 0.5, h - tipH)
+                        ctx.lineTo(w / 2, h - 0.5)
+                        ctx.lineTo(0.5, h - tipH)
+                        ctx.lineTo(0.5, r)
+                        ctx.arcTo(0.5, 0.5, r, 0.5, r)
+                        ctx.closePath()
+
+                        ctx.fillStyle = "#ffffff"
+                        ctx.fill()
+
+                        ctx.lineWidth = 1.2
+                        ctx.strokeStyle = "#25282c"
+                        ctx.stroke()
+                    }
+                }
+
+                MouseArea {
+                    id: handleMA
+                    anchors.fill: parent
+                    anchors.margins: -5
+                    cursorShape: pressed ? Qt.ClosedHandCursor : Qt.PointingHandCursor
+                    acceptedButtons: Qt.LeftButton
+                    hoverEnabled: true
+                    preventStealing: true
+
+                    property bool dragging: false
+
+                    onPressed: (mouse) => {
+                        dragging = true
+                        root.isUserInteracting = true
+                    }
+
+                    onPositionChanged: (mouse) => {
+                        if (!dragging) return
+                        const pt = mapToItem(timelineScroll, mouse.x, mouse.y)
+                        const vx = pt.x - root.clipAreaLeftPx
+                        let sec = root.viewXToSec(vx)
+                        sec = Math.max(0, Math.min(root.timelineDisplayDuration, sec))
+                        const threshSec = 15 * root.secPerPixel
+                        sec = TrackModel.findNearestClipEdge(sec, threshSec)
+                        AudioEngine.seekTime(sec)
+                    }
+
+                    onReleased: {
+                        dragging = false
+                        root.isUserInteracting = false
+                    }
+                }
             }
         }
 

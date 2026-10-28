@@ -113,7 +113,7 @@ Rectangle {
         
         onClicked: (mouse) => {
             // Select this track when clicking on empty areas
-            const additive = (mouse.modifiers & Qt.ControlModifier) !== 0 || (mouse.modifiers & Qt.MetaModifier) !== 0 || (mouse.modifiers & Qt.ShiftModifier) !== 0
+            const additive = (mouse.modifiers & Qt.ControlModifier) !== 0 || (mouse.modifiers & Qt.ShiftModifier) !== 0
             trackRoot.appRoot.selectTrack(trackRoot.trackIndex, additive)
             
             // Also seek to the clicked position
@@ -255,9 +255,6 @@ Rectangle {
                     implicitHeight: 30
                     text: trackRoot.trackName
                     color: trackRoot.textColor
-                    placeholderTextColor: trackRoot.subtextColor
-                    palette.text: trackRoot.textColor
-                    palette.placeholderText: trackRoot.subtextColor
                     selectByMouse: true
                     placeholderText: qsTr("Nombre de la pista")
                     font.pixelSize: 13
@@ -1181,6 +1178,7 @@ Rectangle {
 
                         readonly property bool hasChapters: appRoot ? (appRoot.chapterModel ? appRoot.chapterModel.count > 0 : false) : false
                         readonly property real chapterHeaderHeight: hasChapters ? 24 : 0
+                        readonly property real clipHeaderHeight: 22
 
                         anchors.top: parent.top
                         anchors.bottom: parent.bottom
@@ -1305,11 +1303,49 @@ Rectangle {
                                 border.color: trackRoot.trackColor
                                 border.width: 2
 
+                                // Cabecera del ghost con el color de la pista
+                                Rectangle {
+                                    anchors.top: parent.top
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    height: clipRect ? clipRect.clipHeaderHeight : 22
+                                    color: trackRoot.trackColor
+                                    z: 10
+
+                                    Label {
+                                        anchors.left: parent.left
+                                        anchors.leftMargin: 6
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: (trackRoot.trackName || qsTr("Audio")) + " #" + ((clipRect ? clipRect.index : 0) + 1)
+                                        color: "#ffffff"
+                                        font.pixelSize: 10
+                                        font.bold: true
+                                        style: Text.Outline
+                                        styleColor: Qt.rgba(0, 0, 0, 0.6)
+                                        visible: parent.width > 35
+                                    }
+
+                                    Label {
+                                        anchors.right: parent.right
+                                        anchors.rightMargin: 6
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: (clipRect.clipLenSec || 0).toFixed(1) + " s"
+                                        color: "white"
+                                        font.pixelSize: 10
+                                        font.bold: true
+                                        visible: parent.width > 90
+                                        style: Text.Outline
+                                        styleColor: Qt.rgba(0, 0, 0, 0.6)
+                                    }
+                                }
+
                                 // Waveform real dentro del ghost.
                                 WaveformItem {
                                     id: ghostWave
-                                    anchors.fill: parent
-                                    anchors.margins: 2
+                                    x: 2
+                                    y: 2 + (clipRect ? clipRect.clipHeaderHeight : 22)
+                                    width: Math.max(1, parent.width - 4)
+                                    height: Math.max(1, parent.height - 4 - (clipRect ? clipRect.clipHeaderHeight : 22))
                                     model: TrackModel
                                     trackIndex: trackRoot.trackIndex
                                     clipIndex: clipRect ? clipRect.index : -1
@@ -1321,19 +1357,6 @@ Rectangle {
                                     secPerPixel: appRoot.secPerPixel
                                     clipTimelineStart: 0
                                     fillColor: "#8cffffff"
-                                }
-
-                                Label {
-                                    anchors.top: parent.top
-                                    anchors.left: parent.left
-                                    anchors.margins: 4
-                                    text: (clipRect.clipLenSec || 0).toFixed(1) + " s"
-                                    color: "white"
-                                    font.pixelSize: 10
-                                    font.bold: true
-                                    visible: parent.width > 60
-                                    style: Text.Outline
-                                    styleColor: Qt.rgba(0, 0, 0, 0.6)
                                 }
                             }
                         }
@@ -1373,7 +1396,7 @@ Rectangle {
                         border.width: isSelected ? 2 : 1
                         opacity: (isRecordingClip && liveLengthSec <= 0) ? 0
                                  : clipRect.isGhostDragging ? 0.15
-                                 : (mouseZone.pressedInside ? 0.85
+                                 : (clipHeaderMA.pressedInside ? 0.85
                                  : (clipRect.isSelected ? 0.9 : 0.7))
                         z: isSelected ? 6 : 5
                         
@@ -1384,35 +1407,255 @@ Rectangle {
                             }
                         }
 
-                        // Cursor y eventos del clip.
-                        // z alto para que quede por encima del Canvas y Label
-                        // del propio clip, y claramente por encima del
-                        // timelineMA que está en z:-1.
+                        // ── Cabecera del clip (estilo Audacity: arrastre / mover) ──
+                        Rectangle {
+                            id: clipHeader
+                            anchors.top: parent.top
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            height: clipRect.clipHeaderHeight
+                            color: (clipHeaderMA.dragging || clipHeaderMA.pressedInside)
+                                   ? trackRoot.trackColor
+                                   : Qt.darker(trackRoot.trackColor, 1.35)
+                            z: 22
+
+                            Behavior on color {
+                                ColorAnimation { duration: 100 }
+                            }
+
+                            Rectangle {
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                anchors.bottom: parent.bottom
+                                height: 1
+                                color: Qt.rgba(0, 0, 0, 0.25)
+                            }
+
+                            Label {
+                                id: clipMenuBtn
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: "···"
+                                color: (clipHeaderMA.containsMouse && clipHeaderMA.mouseX >= x - 4 && clipHeaderMA.mouseX <= x + width + 4) ? "#ffffff" : Qt.rgba(1, 1, 1, 0.7)
+                                font.pixelSize: 11
+                                font.bold: true
+                                visible: clipRect.width > 40
+
+                                x: {
+                                    var visRight = Math.min(clipRect.width, appRoot.timelineScrollX + clipArea.width - clipRect.x)
+                                    var targetX = visRight - implicitWidth - 6
+                                    return Math.max(6, Math.min(clipRect.width - implicitWidth - 6, targetX))
+                                }
+                            }
+
+                            Label {
+                                id: clipTitleLabel
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: (trackRoot.trackName || qsTr("Audio")) + " #" + (clipRect.index + 1)
+                                color: "#ffffff"
+                                font.pixelSize: 10
+                                font.bold: true
+                                elide: Text.ElideRight
+                                style: Text.Outline
+                                styleColor: Qt.rgba(0, 0, 0, 0.6)
+                                visible: clipRect.width > 35
+
+                                x: {
+                                    var visLeft = Math.max(0, appRoot.timelineScrollX - clipRect.x)
+                                    var maxX = clipMenuBtn.x - width - 6
+                                    if (maxX < 6) maxX = 6
+                                    return Math.min(visLeft + 6, maxX)
+                                }
+
+                                width: Math.min(implicitWidth, Math.max(10, clipMenuBtn.x - x - 4))
+                            }
+
+                            MouseArea {
+                                id: clipHeaderMA
+                                anchors.fill: parent
+                                acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                cursorShape: (pressedInside || dragging) ? Qt.ClosedHandCursor : Qt.OpenHandCursor
+                                hoverEnabled: true
+
+                                property bool pressedInside: false
+                                property real pressLocalX: 0
+                                property real pressLocalY: 0
+                                property bool dragging: false
+                                property real dragStartX: 0
+                                property real dragStartY: 0
+
+                                onPressed: (mouse) => {
+                                    if (mouse.button === Qt.RightButton) {
+                                        if (trackRoot.appRoot.blockContextMenu) return
+                                        trackRoot.contextClipIndex = clipRect.index
+                                        if (!clipRect.isSelected) {
+                                            trackRoot.appRoot.selectClip(trackRoot.trackIndex, clipRect.index, false)
+                                        }
+                                        clipMenu.open()
+                                        return
+                                    }
+
+                                    if (mouse.x >= clipMenuBtn.x - 4 && mouse.x <= clipMenuBtn.x + clipMenuBtn.width + 4) {
+                                        trackRoot.contextClipIndex = clipRect.index
+                                        if (!clipRect.isSelected) {
+                                            trackRoot.appRoot.selectClip(trackRoot.trackIndex, clipRect.index, false)
+                                        }
+                                        clipMenu.open()
+                                        return
+                                    }
+
+                                    const additive = (mouse.modifiers & Qt.ControlModifier) !== 0
+                                    if (!clipRect.isSelected) {
+                                        trackRoot.appRoot.selectClip(trackRoot.trackIndex, clipRect.index, additive)
+                                    } else if (additive) {
+                                        trackRoot.appRoot.selectClip(trackRoot.trackIndex, clipRect.index, true)
+                                    }
+
+                                    pressedInside = true
+                                    pressLocalX = mouse.x
+                                    pressLocalY = mouse.y
+                                    dragStartX = clipRect.x
+                                    dragStartY = clipRect.y
+
+                                    clipRect.ghostStartX = clipRect.x
+                                    clipRect.ghostStartY = clipRect.y
+                                }
+
+                                onPositionChanged: (mouse) => {
+                                    if (!pressedInside) return
+                                    const dx = mouse.x - pressLocalX
+                                    const dy = mouse.y - pressLocalY
+
+                                    if (!dragging && (Math.abs(dx) > 4 || Math.abs(dy) > 4)) {
+                                        dragging = true
+                                        clipRect.isGhostDragging = true
+
+                                        const overlay = trackRoot.dragOverlayItem
+                                        if (overlay) {
+                                            const globalPos = clipRect.mapToItem(overlay, 0, 0)
+                                            clipRect.ghostVisual = ghostComponent.createObject(overlay, {
+                                                "x": globalPos.x,
+                                                "y": globalPos.y,
+                                                "width": clipRect.width,
+                                                "height": clipRect.height,
+                                                "color": clipRect.color,
+                                                "border.color": clipRect.border.color,
+                                                "opacity": 0.85,
+                                                "z": 999
+                                            })
+                                            clipRect.ghostStartX = globalPos.x
+                                            clipRect.ghostStartY = globalPos.y
+                                        }
+                                    }
+
+                                    if (dragging && clipRect.ghostVisual) {
+                                        const targetX = Math.max(-trackRoot.appRoot.timelineScrollX, clipRect.ghostStartX + dx)
+                                        clipRect.ghostVisual.x = targetX
+
+                                        const dstTrack = trackRoot.appRoot.trackIndexFromDragY(
+                                            trackRoot.trackIndex, clipRect.y + clipHeaderMA.pressLocalY + dy)
+
+                                        const overlay = trackRoot.dragOverlayItem
+                                        if (overlay) {
+                                            const targetY = trackRoot.appRoot.trackItemYInOverlay(dstTrack, overlay)
+                                            clipRect.ghostVisual.y = targetY + 9
+                                        } else {
+                                            clipRect.ghostVisual.y = clipRect.ghostStartY + dy
+                                        }
+
+                                        clipRect.dragOffsetX = targetX - clipRect.ghostStartX
+                                        clipRect.dragOffsetY = dy
+
+                                        if (dstTrack !== trackRoot.trackIndex) {
+                                            trackRoot.appRoot.showTrackDropIndicator(dstTrack, true)
+                                        } else {
+                                            trackRoot.appRoot.showTrackDropIndicator(-1, false)
+                                        }
+                                    }
+                                }
+
+                                onReleased: (mouse) => {
+                                    if (!pressedInside) return
+                                    pressedInside = false
+
+                                    if (dragging) {
+                                        const total = clipArea.displayDuration
+                                        const pxPerSec = total > 0 ? (timelineInner.width / total) : 0
+                                        const deltaSec = pxPerSec > 0 ? clipRect.dragOffsetX / pxPerSec : 0
+
+                                        const srcTrack = trackRoot.trackIndex
+                                        const dstTrack = trackRoot.appRoot.trackIndexFromDragY(
+                                            srcTrack, clipRect.y + clipHeaderMA.pressLocalY + clipRect.dragOffsetY)
+
+                                        const selClips = trackRoot.appRoot.selectedClips
+                                        let clipsToMove = selClips
+                                        if (clipsToMove.length === 0) {
+                                            clipsToMove = [{ track: srcTrack, clip: clipRect.index }]
+                                        }
+
+                                        const deltaTrack = dstTrack - srcTrack
+                                        const theAppRoot = trackRoot.appRoot
+
+                                        const ghostRef = clipRect.ghostVisual
+                                        clipRect.ghostVisual = null
+                                        clipRect.isGhostDragging = false
+                                        clipRect.dragOffsetX = 0
+                                        clipRect.dragOffsetY = 0
+                                        dragging = false
+
+                                        theAppRoot.showTrackDropIndicator(-1, false)
+
+                                        if (deltaSec !== 0 || deltaTrack !== 0) {
+                                            UndoManager.moveMultipleClips(
+                                                clipsToMove, deltaSec, deltaTrack
+                                            )
+                                            theAppRoot.clearClipSelection()
+                                        }
+
+                                        if (ghostRef) {
+                                            Qt.callLater(function() { ghostRef.destroy() })
+                                        }
+                                    }
+                                }
+
+                                onWheel: (wheel) => {
+                                    const viewX = clipRect.x + wheel.x - appRoot.timelineScrollX
+                                    clipArea.handleWheel(wheel, viewX)
+                                }
+
+                                onDoubleClicked: (mouse) => {
+                                    if (mouse.button === Qt.LeftButton) {
+                                        appRoot.setSelection(clipRect.clipStartSec, clipRect.clipEndSec)
+                                    }
+                                }
+                            }
+                        }
+
+                        // ── Zona de onda inferior (estilo Audacity: selección de audio) ──
                         MouseArea {
-                            id: mouseZone
-                            anchors.fill: parent
+                            id: waveSelectionMA
+                            anchors.top: clipHeader.bottom
+                            anchors.bottom: parent.bottom
+                            anchors.left: parent.left
+                            anchors.right: parent.right
                             z: 20
                             acceptedButtons: Qt.LeftButton | Qt.RightButton
-                            cursorShape: containsMouse ? Qt.PointingHandCursor : Qt.ArrowCursor
+                            cursorShape: Qt.IBeamCursor
                             hoverEnabled: true
 
-                            // Estado del drag.
-                            property bool pressedInside: false
-                            property real pressLocalX: 0
-                            property real pressLocalY: 0
+                            property real dragStartSec: -1
                             property bool dragging: false
-                            property real dragStartX: 0
-                            property real dragStartY: 0
+
+                            function xToSec(mx) {
+                                const viewX = clipRect.x + mx - appRoot.timelineScrollX
+                                return appRoot.viewXToSec(viewX)
+                            }
 
                             onPressed: (mouse) => {
                                 if (mouse.button === Qt.RightButton) {
                                     if (trackRoot.appRoot.blockContextMenu) return
                                     trackRoot.contextClipIndex = clipRect.index
-                                    if (!clipRect.isSelected) {
-                                        trackRoot.appRoot.selectClip(trackRoot.trackIndex, clipRect.index, false)
-                                    }
-                                     clipMenu.open()
-                                     return
+                                    clipMenu.open()
+                                    return
                                 }
 
                                 // Alt+Click o Ctrl+Shift+Click: añadir nodo envolvente
@@ -1420,191 +1663,67 @@ Rectangle {
                                     (((mouse.modifiers & Qt.ControlModifier) !== 0) && ((mouse.modifiers & Qt.ShiftModifier) !== 0))) {
                                     const clipLenSec = modelData.lengthSec || 0
                                     const tSec = clipLenSec > 0 ? (mouse.x / clipRect.width) * clipLenSec : 0
-                                    const g = Math.max(0, Math.min(2.0, 2.0 * (1.0 - mouse.y / clipRect.height)))
+                                    const effH = Math.max(1, clipRect.height - clipRect.clipHeaderHeight - clipRect.chapterHeaderHeight)
+                                    const g = Math.max(0, Math.min(2.0, 2.0 * (1.0 - mouse.y / effH)))
                                     UndoManager.addEnvelopeNode(trackRoot.trackIndex, clipRect.index, tSec, g)
                                     return
                                 }
 
-                                // Shift+drag: selección de región por-pista.
-                                if ((mouse.modifiers & Qt.ShiftModifier) !== 0) {
-                                    trackRoot._regionDragging = true
-                                    const total = clipArea.displayDuration
-                                    const innerX = clipRect.x + mouse.x + appRoot.timelineScrollX
-                                    const ratio = total > 0 && timelineInner.width > 0
-                                        ? Math.max(0, Math.min(1, innerX / timelineInner.width)) : 0
-                                    trackRoot._regionDragSec = ratio * total
-                                    appRoot.setTrackRegion(trackRoot.trackIndex,
-                                        trackRoot._regionDragSec, trackRoot._regionDragSec)
+                                const sec = xToSec(mouse.x)
+                                if ((mouse.modifiers & Qt.ShiftModifier) && appRoot.hasSelection) {
+                                    const distToStart = Math.abs(sec - appRoot.selStart)
+                                    const distToEnd = Math.abs(sec - appRoot.selEnd)
+                                    if (distToStart < distToEnd) {
+                                        dragStartSec = appRoot.selEnd
+                                        appRoot.setSelection(sec, appRoot.selEnd)
+                                    } else {
+                                        dragStartSec = appRoot.selStart
+                                        appRoot.setSelection(appRoot.selStart, sec)
+                                    }
+                                    dragging = true
                                     return
                                 }
-                                
-                                const additive = (mouse.modifiers & Qt.ControlModifier) !== 0
-                                
-                                if (!clipRect.isSelected) {
-                                    trackRoot.appRoot.selectClip(trackRoot.trackIndex, clipRect.index, additive)
-                                } else if (additive) {
-                                    trackRoot.appRoot.selectClip(trackRoot.trackIndex, clipRect.index, true)
-                                }
-                                
-                                pressedInside = true
-                                pressLocalX = mouse.x
-                                pressLocalY = mouse.y
-                                dragStartX = clipRect.x
-                                dragStartY = clipRect.y
-                                
-                                // Store initial position for ghost
-                                clipRect.ghostStartX = clipRect.x
-                                clipRect.ghostStartY = clipRect.y
+
+                                dragStartSec = sec
+                                dragging = false
+                                appRoot.clearSelection()
+                                appRoot.clearTrackSelection()
+                                appRoot.clearClipSelection()
+                                trackRoot.appRoot.forceSelectTrack(trackRoot.trackIndex)
                             }
 
                             onPositionChanged: (mouse) => {
-                                // Shift+drag: selección de región.
-                                if (trackRoot._regionDragging) {
-                                    const total = clipArea.displayDuration
-                                    const innerX = clipRect.x + mouse.x + appRoot.timelineScrollX
-                                    const ratio = total > 0 && timelineInner.width > 0
-                                        ? Math.max(0, Math.min(1, innerX / timelineInner.width)) : 0
-                                    appRoot.setTrackRegion(trackRoot.trackIndex,
-                                        trackRoot._regionDragSec, ratio * total)
-                                    return
-                                }
-
-                                if (!pressedInside) return
-                                
-                                const dx = mouse.x - pressLocalX
-                                const dy = mouse.y - pressLocalY
-                                
-                                // Start ghost dragging after 4px movement threshold
-                                if (!dragging && (Math.abs(dx) > 4 || Math.abs(dy) > 4)) {
+                                if (!pressed || dragStartSec < 0) return
+                                const cur = xToSec(mouse.x)
+                                if (!dragging && Math.abs(cur - dragStartSec) > 0.03) {
                                     dragging = true
-                                    clipRect.isGhostDragging = true
-                                    
-                                    // Crear ghost en el overlay global (no en la pista)
-                                    // para que se vea por encima de todas las pistas.
-                                    const overlay = trackRoot.dragOverlayItem
-                                    if (overlay) {
-                                        // Mapear posición del clip a coordenadas del overlay.
-                                        const globalPos = clipRect.mapToItem(overlay, 0, 0)
-                                        clipRect.ghostVisual = ghostComponent.createObject(overlay, {
-                                            "x": globalPos.x,
-                                            "y": globalPos.y,
-                                            "width": clipRect.width,
-                                            "height": clipRect.height,
-                                            "color": clipRect.color,
-                                            "border.color": clipRect.border.color,
-                                            "opacity": 0.85,
-                                            "z": 999
-                                        })
-                                        // Guardar posición inicial del ghost en coords overlay.
-                                        clipRect.ghostStartX = globalPos.x
-                                        clipRect.ghostStartY = globalPos.y
-                                    }
                                 }
-                                
-                                if (dragging && clipRect.ghostVisual) {
-                                    // Solo mover el ghost — el clip original no se toca.
-                                    // Bloquear en el segundo 0:00 (que en coords de dragOverlay es -appRoot.timelineScrollX)
-                                    const targetX = Math.max(-appRoot.timelineScrollX, clipRect.ghostStartX + dx)
-                                    clipRect.ghostVisual.x = targetX
-                                    
-                                    const dstTrack = trackRoot.appRoot.trackIndexFromDragY(
-                                        trackRoot.trackIndex, clipRect.y + mouseZone.pressLocalY + dy)
-                                    
-                                    const overlay = trackRoot.dragOverlayItem
-                                    if (overlay) {
-                                        const targetY = trackRoot.appRoot.trackItemYInOverlay(dstTrack, overlay)
-                                        clipRect.ghostVisual.y = targetY + 9
-                                    } else {
-                                        clipRect.ghostVisual.y = clipRect.ghostStartY + dy
-                                    }
-                                    
-                                    // Guardar offsets para usarlos en onReleased.
-                                    clipRect.dragOffsetX = targetX - clipRect.ghostStartX
-                                    clipRect.dragOffsetY = dy
-                                    
-                                    // Show drop indicator on target track
-                                    if (dstTrack !== trackRoot.trackIndex) {
-                                        trackRoot.appRoot.showTrackDropIndicator(dstTrack, true)
-                                    } else {
-                                        trackRoot.appRoot.showTrackDropIndicator(-1, false)
-                                    }
+                                if (dragging) {
+                                    appRoot.setSelection(dragStartSec, cur)
                                 }
                             }
 
                             onReleased: (mouse) => {
-                                if (trackRoot._regionDragging) {
-                                    trackRoot._regionDragging = false
-                                    return
+                                if (mouse.button !== Qt.LeftButton) return
+                                if (!dragging && dragStartSec >= 0) {
+                                    let targetSec = dragStartSec
+                                    const thresholdSec = 15 * appRoot.secPerPixel
+                                    targetSec = TrackModel.findNearestClipEdge(targetSec, thresholdSec)
+                                    AudioEngine.seekTime(targetSec)
+                                    appRoot.isUserInteracting = false
                                 }
-                                if (!pressedInside) return
-                                pressedInside = false
-                                
-                                if (dragging) {
-                                    // Guardar TODO antes de tocar el modelo, porque
-                                    // moveClips emite clipsChanged que destruye este delegate.
-                                    const total = clipArea.displayDuration
-                                    const pxPerSec = total > 0
-                                        ? (timelineInner.width / total) : 0
-                                    const deltaSec = pxPerSec > 0
-                                        ? clipRect.dragOffsetX / pxPerSec : 0
-                                    
-                                    const srcTrack = trackRoot.trackIndex
-                                    const dstTrack = trackRoot.appRoot.trackIndexFromDragY(
-                                        srcTrack, clipRect.y + mouseZone.pressLocalY + clipRect.dragOffsetY)
-                                     
-                                     const selClips = trackRoot.appRoot.selectedClips
-                                     let clipsToMove = selClips
-                                     if (clipsToMove.length === 0) {
-                                         clipsToMove = [{ track: srcTrack, clip: clipRect.index }]
-                                     }
-                                     
-                                     const deltaTrack = dstTrack - srcTrack
-                                     const theAppRoot = trackRoot.appRoot
-                                     
-                                     // Capture ghost reference before the delegate is
-                                     // destroyed by moveClips → clipsChanged.
-                                     const ghostRef = clipRect.ghostVisual
-                                     clipRect.ghostVisual = null
-                                     clipRect.isGhostDragging = false
-                                     clipRect.dragOffsetX = 0
-                                     clipRect.dragOffsetY = 0
-                                     dragging = false
-                                     
-                                     theAppRoot.showTrackDropIndicator(-1, false)
-                                     
-                                     // Aplicar al modelo — esto destruye este delegate.
-                                     // No acceder a trackRoot ni clipRect después de esto.
-                                     if (deltaSec !== 0 || deltaTrack !== 0) {
-                                         UndoManager.moveMultipleClips(
-                                             clipsToMove, deltaSec, deltaTrack
-                                         )
-                                         theAppRoot.clearClipSelection()
-                                     }
-                                    
-                                    // Destroy ghost AFTER model update so the new clip
-                                    // delegate has time to appear — avoids 1-frame flicker.
-                                    if (ghostRef) {
-                                        Qt.callLater(function() { ghostRef.destroy() })
-                                    }
-                                }
-                            }
-                            
-                            onExited: {
-                                if (!pressedInside) {
-                                    cursorShape = Qt.ArrowCursor
-                                }
+                                dragStartSec = -1
+                                dragging = false
                             }
 
                             onWheel: (wheel) => {
-                                // Convertir coordenadas del clip a clipArea.
                                 const viewX = clipRect.x + wheel.x - appRoot.timelineScrollX
                                 clipArea.handleWheel(wheel, viewX)
                             }
 
                             onDoubleClicked: (mouse) => {
                                 if (mouse.button === Qt.LeftButton) {
-                                    const mapped = mapToItem(clipArea, mouse.x, mouse.y)
-                                    const targetSec = appRoot.viewXToSec(mapped.x)
+                                    const targetSec = xToSec(mouse.x)
                                     AudioEngine.seekTime(targetSec)
                                     AudioEngine.play()
                                 }
@@ -1619,11 +1738,11 @@ Rectangle {
                             // clipRect.width changes by (-_trimLeftOffset + _trimRightOffset),
                             // so we undo that to keep the original pixel width.
                             x: 2 - clipRect._trimLeftOffset
-                            y: 2 + clipRect.chapterHeaderHeight
+                            y: 2 + clipRect.chapterHeaderHeight + clipRect.clipHeaderHeight
                             width: Math.max(1, clipRect.width - 4
                                             + clipRect._trimLeftOffset
                                             - clipRect._trimRightOffset)
-                            height: clipRect.height - 4 - clipRect.chapterHeaderHeight
+                            height: Math.max(1, clipRect.height - 4 - clipRect.chapterHeaderHeight - clipRect.clipHeaderHeight)
 
                             model: TrackModel
                             trackIndex: trackRoot.trackIndex
@@ -1704,7 +1823,7 @@ Rectangle {
                         Row {
                             id: clipInfoBar
                             anchors.top: parent.top
-                            anchors.topMargin: 3 + clipRect.chapterHeaderHeight
+                            anchors.topMargin: 3 + clipRect.chapterHeaderHeight + clipRect.clipHeaderHeight
                             x: {
                                 // Cuánto del borde izquierdo del clip está oculto
                                 var hiddenLeft = appRoot.timelineScrollX - clipRect.x
@@ -1932,8 +2051,8 @@ Rectangle {
                         property real _liveGain:       modelData ? (modelData.gain !== undefined ? modelData.gain : 1.0) : 1.0
 
                         property real gainY: {
-                            const h = height - chapterHeaderHeight
-                            return chapterHeaderHeight + Math.max(0, Math.min(h, h - (h * (_liveGain / 2.0))))
+                            const h = height - chapterHeaderHeight - clipHeaderHeight
+                            return chapterHeaderHeight + clipHeaderHeight + Math.max(0, Math.min(h, h - (h * (_liveGain / 2.0))))
                         }
                         
                         // --- Left Trim Handle ---
@@ -1948,9 +2067,9 @@ Rectangle {
                             id: leftTrimHandle
                             // Posición: siempre pegado al borde izquierdo visual actual
                             x: 0
-                            y: clipRect.chapterHeaderHeight
+                            y: clipRect.chapterHeaderHeight + clipRect.clipHeaderHeight
                             width: 10
-                            height: parent.height - clipRect.chapterHeaderHeight
+                            height: Math.max(1, parent.height - clipRect.chapterHeaderHeight - clipRect.clipHeaderHeight)
                             z: 30
                             cursorShape: Qt.SizeHorCursor
                             hoverEnabled: true
@@ -2010,9 +2129,9 @@ Rectangle {
                         MouseArea {
                             id: rightTrimHandle
                             x: parent.width - 10
-                            y: clipRect.chapterHeaderHeight
+                            y: clipRect.chapterHeaderHeight + clipRect.clipHeaderHeight
                             width: 10
-                            height: parent.height - clipRect.chapterHeaderHeight
+                            height: Math.max(1, parent.height - clipRect.chapterHeaderHeight - clipRect.clipHeaderHeight)
                             z: 30
                             cursorShape: Qt.SizeHorCursor
                             hoverEnabled: true
@@ -2149,7 +2268,7 @@ Rectangle {
                                     ctx.lineTo(width, height)
                                     ctx.closePath()
                                     ctx.fill()
-
+ 
                                     // Línea de envolvente
                                     ctx.strokeStyle = Qt.rgba(1, 1, 1, 0.9)
                                     ctx.lineWidth = 1.5
@@ -2189,7 +2308,7 @@ Rectangle {
                                     const fy = clipRect.gainY
                                     const fInX = clipRect.fadeInPx
                                     const fOutX = width - clipRect.fadeOutPx
-
+ 
                                     // Relleno inferior oscuro
                                     ctx.fillStyle = Qt.rgba(0, 0, 0, 0.4)
                                     ctx.beginPath()
@@ -2200,7 +2319,7 @@ Rectangle {
                                     ctx.lineTo(0, height)
                                     ctx.closePath()
                                     ctx.fill()
-
+ 
                                     // Línea de envolvente
                                     ctx.strokeStyle = Qt.rgba(1, 1, 1, 0.9)
                                     ctx.lineWidth = 1.5
@@ -2251,7 +2370,7 @@ Rectangle {
                                 if (!pressed) return
                                 const absY = mapToItem(clipRect, 0, mouse.y).y
                                 const dy = absY - startAbsY
-                                const h = clipRect.height - clipRect.chapterHeaderHeight
+                                const h = Math.max(1, clipRect.height - clipRect.chapterHeaderHeight - clipRect.clipHeaderHeight)
                                 let newGain = startGain - (dy / h) * 2.0
                                 clipRect._liveGain = Math.max(0, Math.min(newGain, 2.0))
                                 startAbsY = absY
@@ -2278,7 +2397,7 @@ Rectangle {
                                 
                                 readonly property real clipLenSec: clipRect.modelData.lengthSec || 0
                                 readonly property real px: clipLenSec > 0 ? (isDragging ? liveNodeSec : modelData.x) / clipLenSec * clipRect.width : 0
-                                readonly property real py: clipRect.chapterHeaderHeight + (clipRect.height - clipRect.chapterHeaderHeight) * (1.0 - (isDragging ? liveNodeGain : modelData.y) / 2.0)
+                                readonly property real py: clipRect.chapterHeaderHeight + clipRect.clipHeaderHeight + (clipRect.height - clipRect.chapterHeaderHeight - clipRect.clipHeaderHeight) * (1.0 - (isDragging ? liveNodeGain : modelData.y) / 2.0)
                                 
                                 x: px - width / 2
                                 y: py - height / 2
@@ -2325,7 +2444,7 @@ Rectangle {
                                     const dy = abs.y - startAbsY
                                     
                                     const pxPerSec = clipLenSec > 0 ? clipRect.width / clipLenSec : 0
-                                    const pxPerGain = (clipRect.height - clipRect.chapterHeaderHeight) / 2.0
+                                    const pxPerGain = (clipRect.height - clipRect.chapterHeaderHeight - clipRect.clipHeaderHeight) / 2.0
                                     
                                     let newSec = startNodeX + (pxPerSec > 0 ? dx / pxPerSec : 0)
                                     newSec = Math.max(0, Math.min(newSec, clipLenSec))
@@ -2506,6 +2625,9 @@ Rectangle {
             property bool _regionDragLocal: false
             property real _regionDragSecLocal: 0
 
+            property real dragStartSec: -1
+            property bool dragging: false
+
             function xToSec(x) {
                 return appRoot.viewXToSec(x)
             }
@@ -2514,8 +2636,8 @@ Rectangle {
                 if (mouse.button === Qt.RightButton) {
                     if (trackRoot.appRoot.blockContextMenu) return
                     trackRoot.contextClipIndex = -1
-                     clipMenu.open()
-                     return
+                    clipMenu.open()
+                    return
                 }
                 if ((mouse.modifiers & Qt.ShiftModifier) !== 0) {
                     _regionDragLocal = true
@@ -2524,19 +2646,42 @@ Rectangle {
                         _regionDragSecLocal, _regionDragSecLocal)
                     return
                 }
-                // Left click en zona vacía: mover cursor Y seleccionar pista
+                const sec = xToSec(mouse.x)
+                dragStartSec = sec
+                dragging = false
+                appRoot.clearSelection()
+                appRoot.clearTrackSelection()
+                appRoot.clearClipSelection()
                 trackRoot.appRoot.forceSelectTrack(trackRoot.trackIndex)
-                AudioEngine.seekTime(xToSec(mouse.x))
-                // Seek = reactivar auto-scroll
-                appRoot.isUserInteracting = false
             }
             onPositionChanged: (mouse) => {
-                if (!pressed || !_regionDragLocal) return
-                appRoot.setTrackRegion(trackRoot.trackIndex,
-                    _regionDragSecLocal, xToSec(mouse.x))
+                if (_regionDragLocal) {
+                    appRoot.setTrackRegion(trackRoot.trackIndex,
+                        _regionDragSecLocal, xToSec(mouse.x))
+                    return
+                }
+                if (!pressed || dragStartSec < 0) return
+                const cur = xToSec(mouse.x)
+                if (!dragging && Math.abs(cur - dragStartSec) > 0.03) {
+                    dragging = true
+                }
+                if (dragging) {
+                    appRoot.setSelection(dragStartSec, cur)
+                }
             }
             onReleased: (mouse) => {
-                _regionDragLocal = false
+                if (_regionDragLocal) {
+                    _regionDragLocal = false
+                    return
+                }
+                if (mouse.button !== Qt.LeftButton) return
+                if (!dragging && dragStartSec >= 0) {
+                    trackRoot.appRoot.forceSelectTrack(trackRoot.trackIndex)
+                    AudioEngine.seekTime(dragStartSec)
+                    appRoot.isUserInteracting = false
+                }
+                dragStartSec = -1
+                dragging = false
             }
 
             onWheel: (wheel) => {

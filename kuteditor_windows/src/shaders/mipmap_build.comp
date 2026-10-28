@@ -1,0 +1,127 @@
+#version 450
+
+/*
+ * mipmap_build.comp — GPU Mipmap Pyramid Builder
+ *
+ * Builds one mipmap level per dispatch into a PACKED mipmap SSBO.
+ * All levels are stored contiguously; the outputOffset uniform
+ * tells the shader where in the packed buffer to write.
+ *
+ * Phase 0 (Level 0): Read raw interleaved samples, reduce blocks of
+ *   BASE_BLOCK frames into (min, max) peaks.
+ *
+ * Phase 1+ (Levels 1-5): Read previous level's peaks from the same
+ *   packed buffer (at prevOffset), reduce groups of LOD_RATIO (4).
+ *
+ * Uses a UBO (binding 2) instead of push_constants for QRhi compatibility.
+ */
+
+layout(local_size_x = 256) in;
+
+// Raw audio samples (interleaved float32)
+layout(std430, binding = 0) readonly buffer SamplesIn {
+    float samples[];
+};
+
+// Packed mipmap buffer (all levels contiguous)
+layout(std430, binding = 1) buffer MipmapPacked {
+    vec2 mipmap[];   // .x = max, .y = min
+};
+
+// Uniform parameters (replaces push_constant for QRhi compat)
+layout(std140, binding = 2) uniform Params {
+    uint totalFrames;     // Total audio frames
+    uint channels;        // Number of interleaved channels
+    uint blockSize;       // Frames per output peak entry
+    uint channel;         // Which channel to process
+    uint phase;           // 0 = from raw samples, 1+ = from prev level
+    uint prevBlockSize;   // Block size of previous level
+    uint numOutputBlocks; // Total output blocks for this level
+    uint outputOffset;    // Write offset into mipmap[] for this level
+    uint prevOffset;      // Read offset into mipmap[] for previous level
+};
+
+shared float s_max[256];
+shared float s_min[256];
+
+void main() {
+    uint lid = gl_LocalInvocationIndex;
+    uint blockIdx = gl_WorkGroupID.x;
+
+    if (blockIdx >= numOutputBlocks) return;
+
+    if (phase == 0u) {
+        // ---- Phase 0: Raw samples → Level 0 ----
+        float localMax = -2.0;
+        float localMin =  2.0;
+
+        uint baseFrame = blockIdx * blockSize;
+
+        for (uint i = lid; i < blockSize; i += 256u) {
+            uint frame = baseFrame + i;
+            if (frame < totalFrames) {
+                float v = samples[frame * channels + channel];
+                localMax = max(localMax, v);
+                localMin = min(localMin, v);
+            }
+        }
+
+        s_max[lid] = localMax;
+        s_min[lid] = localMin;
+        barrier();
+
+        // Parallel reduction
+        for (uint s = 128u; s > 0u; s >>= 1u) {
+            if (lid < s) {
+                s_max[lid] = max(s_max[lid], s_max[lid + s]);
+                s_min[lid] = min(s_min[lid], s_min[lid + s]);
+            }
+            barrier();
+        }
+
+        if (lid == 0u) {
+            float mx = s_max[0];
+            float mn = s_min[0];
+            if (mx < -1.0) mx = 0.0;
+            if (mn >  1.0) mn = 0.0;
+            mipmap[outputOffset + blockIdx] = vec2(mx, mn);
+        }
+
+    } else {
+        // ---- Phase 1+: Previous level → Current level ----
+        uint ratio = blockSize / prevBlockSize;
+
+        float localMax = -2.0;
+        float localMin =  2.0;
+
+        if (lid < ratio) {
+            uint prevIdx = blockIdx * ratio + lid;
+            uint maxPrevBlocks = (totalFrames + prevBlockSize - 1u) / prevBlockSize;
+            if (prevIdx < maxPrevBlocks) {
+                vec2 p = mipmap[prevOffset + prevIdx];
+                localMax = p.x;
+                localMin = p.y;
+            }
+        }
+
+        s_max[lid] = localMax;
+        s_min[lid] = localMin;
+        barrier();
+
+        for (uint s = 128u; s > 0u; s >>= 1u) {
+            if (lid < s) {
+                s_max[lid] = max(s_max[lid], s_max[lid + s]);
+                s_min[lid] = min(s_min[lid], s_min[lid + s]);
+            }
+            barrier();
+        }
+
+        if (lid == 0u) {
+            float mx = s_max[0];
+            float mn = s_min[0];
+            if (mx < -1.0) mx = 0.0;
+            if (mn >  1.0) mn = 0.0;
+            mipmap[outputOffset + blockIdx] = vec2(mx, mn);
+        }
+    }
+}
