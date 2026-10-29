@@ -1,0 +1,25 @@
+# macOS build artifacts
+build/
+*.app/
+*.dmg
+*.dSYM/
+*.o
+Info.plist
+
+# 3rdparty heavy binaries
+3rdparty/sparkle_tools/
+3rdparty/ffmpeg/ffmpeg
+
+# Distribution
+dist/*.dmg
+
+# Sparkle private keys & credentials
+sparkle_private_key*
+*.key
+*.pem
+*.p12
+
+# OS files
+.DS_Store
+.DS_Store?
+._*

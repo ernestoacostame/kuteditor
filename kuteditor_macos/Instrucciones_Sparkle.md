@@ -26,14 +26,14 @@ Dado que la clave privada se guarda en el Llavero de macOS y no en un archivo de
 ### En el Mac de origen (donde se generó la clave originalmente):
 1. Ejecuta el comando de exportación para guardar la clave privada temporalmente en un archivo:
    ```bash
-   /Users/elav/Developer/KutStudio/kuteditor/kuteditor_macos/3rdparty/sparkle_tools/bin/generate_keys -x ~/Desktop/sparkle_private_key
+   ./3rdparty/sparkle_tools/bin/generate_keys -x ~/Desktop/sparkle_private_key
    ```
 2. Mueve de forma segura el archivo `sparkle_private_key` (creado en tu Escritorio) al Mac de destino (ej. vía AirDrop o pendrive). *No lo envíes por correos o servidores públicos sin cifrar.*
 
 ### En el Mac de destino (donde deseas importar la clave):
 1. Coloca el archivo en tu Escritorio y ejecútalo con el comando de importación:
    ```bash
-   /Users/elav/Developer/KutStudio/kuteditor/kuteditor_macos/3rdparty/sparkle_tools/bin/generate_keys -f ~/Desktop/sparkle_private_key
+   ./3rdparty/sparkle_tools/bin/generate_keys -f ~/Desktop/sparkle_private_key
    ```
 2. **Importante:** Elimina el archivo `sparkle_private_key` de tu Escritorio en ambos ordenadores una vez completado el proceso.
 
@@ -47,7 +47,7 @@ No necesitas ejecutar este comando para compilaciones locales de prueba. Solo ha
 1. Compila la aplicación y genera el archivo `.dmg` (por ejemplo, `KutEditor-1.5.2.dmg`).
 2. Ejecuta la herramienta de firma pasándole el `.dmg` como argumento:
    ```bash
-   /Users/elav/Developer/KutStudio/kuteditor/kuteditor_macos/3rdparty/sparkle_tools/bin/sign_update /ruta/a/tu/KutEditor-1.5.2.dmg
+   ./3rdparty/sparkle_tools/bin/sign_update /ruta/a/tu/KutEditor-1.5.2.dmg
    ```
    *(La primera vez, macOS solicitará permiso para acceder a tu Llavero. Elige "Permitir siempre" para que no vuelva a preguntar).*
 3. El comando devolverá un texto como este:

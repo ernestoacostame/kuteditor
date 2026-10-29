@@ -8,7 +8,7 @@
             <sparkle:version>1.5.15</sparkle:version>
             <sparkle:shortVersionString>1.5.15</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
-            <enclosure url="https://kuteditor.com/KutEditor-1.5.15.dmg" length="115612120" type="application/octet-stream" sparkle:edSignature="n2Tw3UKszxq+YTNyagp+ysTXmlxkE87KjrLybCpVASrT6993fjiF+1y0VlwMDpt43WvTBNjvEFrAPuHV7UlQBg=="/>
+            <enclosure url="https://kutstudio.org/download/KutEditor-1.5.15.dmg" length="115612120" type="application/octet-stream" sparkle:edSignature="n2Tw3UKszxq+YTNyagp+ysTXmlxkE87KjrLybCpVASrT6993fjiF+1y0VlwMDpt43WvTBNjvEFrAPuHV7UlQBg=="/>
         </item>
         <item>
             <title>1.5.13</title>
@@ -16,7 +16,7 @@
             <sparkle:version>1.5.13</sparkle:version>
             <sparkle:shortVersionString>1.5.13</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
-            <enclosure url="https://kuteditor.com/KutEditor-1.5.13.dmg" length="116939492" type="application/octet-stream" sparkle:edSignature="Ji7Xcrib5b1P40OPoAq5XTtrO7nul3nan+4NRSEtBfTLCD8Bzl2AwgiSbJ+sPSiBthYj6t9DezTVWjqAvAQBAA=="/>
+            <enclosure url="https://kutstudio.org/download/KutEditor-1.5.13.dmg" length="116939492" type="application/octet-stream" sparkle:edSignature="Ji7Xcrib5b1P40OPoAq5XTtrO7nul3nan+4NRSEtBfTLCD8Bzl2AwgiSbJ+sPSiBthYj6t9DezTVWjqAvAQBAA=="/>
         </item>
         <item>
             <title>1.5.12</title>
@@ -24,7 +24,7 @@
             <sparkle:version>1.5.12</sparkle:version>
             <sparkle:shortVersionString>1.5.12</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
-            <enclosure url="https://kuteditor.com/KutEditor-1.5.12.dmg" length="115596654" type="application/octet-stream" sparkle:edSignature="GavoRLYju18q7Hdps5UBq/IbFWausLHd4nL4M331Ng1+uXYnxnXPn0HmH3/zXVTVW6Nwad2EB9Nnw7XjfaF9Bw=="/>
+            <enclosure url="https://kutstudio.org/download/KutEditor-1.5.12.dmg" length="115596654" type="application/octet-stream" sparkle:edSignature="GavoRLYju18q7Hdps5UBq/IbFWausLHd4nL4M331Ng1+uXYnxnXPn0HmH3/zXVTVW6Nwad2EB9Nnw7XjfaF9Bw=="/>
         </item>
     </channel>
 </rss>

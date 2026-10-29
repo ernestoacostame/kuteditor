@@ -1,1 +1,55 @@
-/.DS_Store
+# Archivos del sistema
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+desktop.ini
+Thumbs.db
+
+# IDEs y configuración local
+.vscode/
+.idea/
+*.user
+*.user.*
+CMakeUserPresets.json
+
+# Compilación y artefactos
+build/
+**/build/
+cmake-build-*/
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dylib.dSYM/
+*.dSYM/
+*.app/
+*.dmg
+*.exe
+*.pkg.tar.zst
+*.deb
+*.rpm
+
+# Distribución
+dist/*.dmg
+dist/*.exe
+dist/*.zip
+
+# Claves privadas, certificados y credenciales
+sparkle_private_key*
+*.key
+*.pem
+*.p12
+*.cer
+*.crt
+
+# Binarios pesados de terceros en macOS
+kuteditor_macos/3rdparty/sparkle_tools/
+kuteditor_macos/3rdparty/ffmpeg/ffmpeg
+
+# Paquetes y archivos comprimidos
+*.tar.gz
+*.zip
+*.7z

@@ -31,7 +31,7 @@
 	<key>NSMicrophoneUsageDescription</key>
 	<string>KutEditor necesita acceder a tu micrófono para poder grabar pistas de audio en tus proyectos de podcast.</string>
 	<key>SUFeedURL</key>
-	<string>https://kuteditor.com/appcast.xml</string>
+	<string>https://kutstudio.org/download/appcast.xml</string>
 	<key>SUPublicEDKey</key>
 	<string>2ASAYUzWSE4Y7eGxEJQ0Gwhh60be80zlTcaUuXPA3eA=</string>
 	<key>SUEnableAutomaticChecks</key>
