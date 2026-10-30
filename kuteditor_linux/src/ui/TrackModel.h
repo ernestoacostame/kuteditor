@@ -245,8 +245,8 @@ public:
   /// Aplanado de la pista a un buffer continuo. Costoso; usar solo para
   /// export o acceso ocasional. Usa caché internamente.
   QVector<float> trackSamples(int index) const;
-  Q_INVOKABLE QVariantList noiseProfileMagnitudes() const;
-  Q_INVOKABLE bool hasNoiseProfile() const { return !m_noiseProfile.isEmpty(); }
+  QVariantList noiseProfileMagnitudes() const;
+  bool hasNoiseProfile() const { return !m_noiseProfile.isEmpty(); }
 
   /// Puntero a la caché aplanada. Válido hasta la siguiente mutación.
   /// NOTA: Costoso en RAM. Usar readMixSegment() para playback en tiempo real.

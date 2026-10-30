@@ -63,7 +63,7 @@ public:
     /// Último error legible (si el return de save/open fue false).
     Q_INVOKABLE QString lastError() const { return m_lastError; }
 
-    Q_INVOKABLE bool hasRecoveryProject() const;
+    bool hasRecoveryProject() const;
     Q_INVOKABLE bool recoverProject();
     Q_INVOKABLE void discardRecovery();
     Q_INVOKABLE bool updateProjectPathAndTitle(const QString &oldProjPath, const QString &newProjPath, const QString &newTitle);
