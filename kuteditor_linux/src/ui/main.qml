@@ -14,7 +14,7 @@ ApplicationWindow {
     height: 800
     minimumWidth: 960
     minimumHeight: 600
-    visible: FeatureKutPod
+    visible: true
     title: showLibrary
            ? qsTr("Kut Editor — Biblioteca")
            : (ProjectIO.isDirty ? "● " : "") +
@@ -4817,7 +4817,7 @@ ApplicationWindow {
     }
 
     Component.onCompleted: {
-        if (ProjectIO.hasRecoveryProject()) {
+        if (ProjectIO.hasRecoveryProject) {
             recoveryDialog.open()
         }
     }
