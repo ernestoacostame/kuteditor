@@ -658,12 +658,12 @@ void TrackModel::rebuildFlatCache(const Track &t) const {
     if (src.channels != ch)
       continue;
     const qint64 copyN =
-        std::min<qint64>(c.length, (src.samplesVec().size() / ch) - c.sourceOffset);
+        std::min<qint64>(c.length, (src.samplesSize() / ch) - c.sourceOffset);
     if (copyN <= 0)
       continue;
 
     // Punteros al origen y destino
-    const float *srcBuf = src.samplesVec().constData() + c.sourceOffset * ch;
+    const float *srcBuf = src.samplesConstData() + c.sourceOffset * ch;   // heap o mmap
     float *dst = t.flatCache.data() + c.timelineStart * ch;
     const qint64 totalSamples = copyN * ch;
 
@@ -2502,6 +2502,14 @@ QVector<float> TrackModel::trackSourceSamples(int trackIndex, int sourceIdx,
     *outSampleRate = src.sampleRate;
   if (outChannels)
     *outChannels = src.channels;
+  // Los sources largos (>30 s) viven en un mmap, no en el vector del heap: devolver
+  // samplesVec() daría un vector vacío y el guardado omitiría el audio de la pista.
+  if (src.isMmapped()) {
+    const qint64 n = src.samplesSize();
+    QVector<float> copy(n);
+    std::memcpy(copy.data(), src.samplesConstData(), size_t(n) * sizeof(float));
+    return copy;
+  }
   return src.samplesVec();
 }
 
