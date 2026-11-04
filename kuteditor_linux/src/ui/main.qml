@@ -4812,6 +4812,17 @@ ApplicationWindow {
         }
     }
 
+    // Una importación que falla (sin espacio, ffmpeg, archivo no válido…) ya no es silenciosa
+    Connections {
+        target: TrackModel
+        function onImportFinished(fileName, ok, message) {
+            if (!ok) {
+                infoDialog.message = qsTr("No se pudo importar «%1».").arg(fileName) + "\n" + message
+                infoDialog.open()
+            }
+        }
+    }
+
     Component.onCompleted: {
         if (ProjectIO.hasRecoveryProject) {
             recoveryDialog.open()

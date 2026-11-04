@@ -1,4 +1,5 @@
 #include "MmapAudioBuffer.h"
+#include "KutScratch.h"
 
 #include <QDir>
 #include <QDebug>
@@ -190,8 +191,15 @@ bool MmapAudioBuffer::create(int64_t totalFloats) {
     m_size = totalFloats;
 
     // Crear archivo temporal
-    m_filePath = QDir::tempPath() + QString("/kut_mmap_%1.raw")
-                     .arg(reinterpret_cast<quintptr>(this), 0, 16);
+    // Carpeta de trabajo en disco (no /tmp: puede ser un tmpfs en RAM) y con espacio suficiente.
+    const qint64 freeB = KutScratch::freeBytes();
+    if (freeB >= 0 && freeB < m_bytes + (256LL << 20)) {
+        qWarning() << "[MmapAudioBuffer] Sin espacio en" << KutScratch::dir()
+                   << ": libres" << (freeB >> 20) << "MB, hacen falta" << (m_bytes >> 20) << "MB";
+        m_data = nullptr; m_size = 0; m_bytes = 0;
+        return false;
+    }
+    m_filePath = KutScratch::uniqueFile(QStringLiteral("kut_mmap"), QStringLiteral("raw"));
 
     m_fd = ::open(m_filePath.toUtf8().constData(),
                   O_RDWR | O_CREAT | O_TRUNC, 0600);
@@ -221,6 +229,11 @@ bool MmapAudioBuffer::create(int64_t totalFloats) {
     }
 
     m_data = static_cast<float*>(ptr);
+
+    // Borrar el nombre ya: el archivo vive mientras esté abierto/mapeado y, si el programa muere,
+    // el sistema lo libera solo (no quedan restos de varios GB).
+    ::unlink(m_filePath.toUtf8().constData());
+    m_filePath.clear();
 
     // Indicar al SO que el acceso será secuencial (optimiza prefetch).
 #ifdef MADV_SEQUENTIAL

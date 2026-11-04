@@ -24,6 +24,7 @@ bool AudioMipmap::loadFile(const QString &path, int channels, int sampleRate) {
         m_mappedData = nullptr;
     }
     m_samples.clear();
+    m_extData = nullptr; m_extOwner.reset();
     m_levels.clear();
     m_ready = false;
 
@@ -60,9 +61,27 @@ bool AudioMipmap::loadFile(const QString &path, int channels, int sampleRate) {
     return true;
 }
 
+bool AudioMipmap::loadExternal(const float *data, qint64 floatCount, int channels, int sampleRate,
+                               std::shared_ptr<void> owner) {
+    if (!data || floatCount <= 0 || channels <= 0) return false;
+    {
+        QMutexLocker lock(&m_mutex);
+        m_samples.clear();
+        m_extData = data;
+        m_extOwner = std::move(owner);
+        m_channels = channels;
+        m_sampleRate = sampleRate;
+        m_totalFrames = floatCount / channels;
+        if (m_levels.isEmpty()) m_ready = false;
+    }
+    m_calcFuture = QtConcurrent::run([this]() { calculateMipmaps(); });
+    return true;
+}
+
 bool AudioMipmap::loadFromVector(const QVector<float> &samples, int channels, int sampleRate) {
     {
         QMutexLocker lock(&m_mutex);
+        m_extData = nullptr; m_extOwner.reset();
         m_samples = samples;
         m_channels = channels;
         m_sampleRate = sampleRate;
@@ -82,6 +101,7 @@ void AudioMipmap::setLiveParams(int channels, int sampleRate) {
     m_sampleRate = sampleRate;
     m_totalFrames = 0;
     m_samples.clear();
+    m_extData = nullptr; m_extOwner.reset();
     m_levels.clear();
 
     // Pre-create empty LOD levels so appendSamples() can work immediately
@@ -162,7 +182,9 @@ float AudioMipmap::getSample(qint64 frame, int channel) const {
     if (channel < 0 || channel >= m_channels) return 0.0f;
 
     const float *data = nullptr;
-    if (m_mappedData) {
+    if (m_extData) {
+        data = m_extData;
+    } else if (m_mappedData) {
         data = reinterpret_cast<const float*>(m_mappedData + m_dataOffset);
     } else if (!m_samples.isEmpty()) {
         data = m_samples.constData();
@@ -181,7 +203,9 @@ void AudioMipmap::calculateMipmaps() {
 
     // ── Try GPU compute path first ──
     const float *rawPtr = nullptr;
-    if (m_mappedData) {
+    if (m_extData) {
+        rawPtr = m_extData;
+    } else if (m_mappedData) {
         rawPtr = reinterpret_cast<const float *>(m_mappedData + m_dataOffset);
     } else if (!m_samples.isEmpty()) {
         rawPtr = m_samples.constData();
@@ -275,7 +299,9 @@ AudioPeak AudioMipmap::getRawPeak(qint64 start, qint64 end, int channel) const {
 
     const float *data = nullptr;
 
-    if (m_mappedData) {
+    if (m_extData) {
+        data = m_extData;
+    } else if (m_mappedData) {
         data = reinterpret_cast<const float*>(m_mappedData + m_dataOffset);
     } else {
         data = m_samples.constData();
@@ -461,6 +487,7 @@ void AudioMipmap::getPeaksBatch(const qint64 *starts, const qint64 *ends, int co
 
 const float *AudioMipmap::rawData() const {
     QMutexLocker lock(&m_mutex);
+    if (m_extData) return m_extData;
     if (m_mappedData) {
         return reinterpret_cast<const float *>(m_mappedData + m_dataOffset);
     }
