@@ -71,6 +71,11 @@ public:
       if (mmapBuffer && mmapBuffer->isValid()) return mmapBuffer->constData();
       return samples ? samples->constData() : nullptr;
     }
+    /// Puntero mutable a los samples (mmap o heap, transparente).
+    float *samplesData() {
+      if (mmapBuffer && mmapBuffer->isValid()) return mmapBuffer->data();
+      return samples ? samples->data() : nullptr;
+    }
     /// Número total de floats (interleaved).
     qint64 samplesSize() const {
       if (mmapBuffer && mmapBuffer->isValid()) return mmapBuffer->size();
@@ -335,6 +340,12 @@ public:
   /// Thread-safe (toma el mutex).
   QVector<float> trackSourceSamples(int trackIndex, int sourceIdx,
                                     int *outSampleRate, int *outChannels) const;
+
+  /// Puntero directo a los samples de un source (mmap o heap, sin copia en memoria).
+  const float *trackSourceData(int trackIndex, int sourceIdx,
+                               qint64 *outSizeFloats = nullptr,
+                               int *outSampleRate = nullptr,
+                               int *outChannels = nullptr) const;
 
   /// QML-friendly version that returns sample data without output parameters.
   /// Returns an empty QVariantMap if the source doesn't exist.

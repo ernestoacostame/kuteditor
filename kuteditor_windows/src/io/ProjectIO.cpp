@@ -17,6 +17,9 @@
 #include <QStandardPaths>
 #include <cstring>
 #include <QUrl>
+#if defined(Q_OS_LINUX)
+#include <malloc.h>
+#endif
 
 static QString resolveProjectPath(const QString &path) {
     if (path.startsWith("file://")) {
@@ -564,14 +567,27 @@ bool ProjectIO::applyProjectJson(const QByteArray &json, const QString &extractD
             int sr = 48000, ch = 2;
             if (!readWavFloat32(absFile, samples, sr, ch)) {
                 qWarning() << "[ProjectIO] No pude leer source:" << absFile;
-                if (isRecovery) {
-                    // Si es una recuperación de emergencia, creamos un source vacío de silencio de 1 segundo
-                    // en vez de abortar todo el proyecto.
-                    samples.fill(0.0f, sr * ch);
-                    qWarning() << "[ProjectIO] Modo recuperación: Rellenando con silencio para" << absFile;
-                } else {
-                    m_lastError = tr("No se pudo leer el archivo de audio: %1").arg(absFile);
-                    return false;
+                // Si falta el WAV (por ejemplo, proyecto guardado con error previo o archivo ausente),
+                // buscar primero en el recoveryDir. Si no está, rellenar con silencio equivalente
+                // para preservar todas las pistas, nombres, colores, efectos y el resto de la sesión.
+                QString recFile = recoveryDir() + "/" + QFileInfo(relFile).fileName();
+                bool okRecovered = false;
+                if (QFile::exists(recFile) && readWavFloat32(recFile, samples, sr, ch)) {
+                    qWarning() << "[ProjectIO] Recuperado desde copia de seguridad:" << recFile;
+                    okRecovered = true;
+                }
+                if (!okRecovered) {
+                    qint64 maxNeededFrames = qint64(sr);
+                    const QJsonArray clipArr = t.value("clips").toArray();
+                    for (const QJsonValue &cv : clipArr) {
+                        const QJsonObject co = cv.toObject();
+                        if (co.value("sourceIdx").toInt(-1) == s) {
+                            qint64 needed = qint64(co.value("sourceOffset").toDouble() + co.value("length").toDouble());
+                            if (needed > maxNeededFrames) maxNeededFrames = needed;
+                        }
+                    }
+                    samples.fill(0.0f, maxNeededFrames * ch);
+                    qWarning() << "[ProjectIO] Rellenando con silencio para no perder el proyecto:" << absFile;
                 }
             }
             const int createdIdx = m_trackModel->addSourceToTrack(trackIdx, samples, sr, ch);
@@ -714,10 +730,11 @@ bool ProjectIO::save(const QString &path)
         const int nSrc = m_trackModel->trackSourceCount(i);
         for (int s = 0; s < nSrc; ++s) {
             int sr = 48000, ch = 2;
-            QVector<float> samples = m_trackModel->trackSourceSamples(i, s, &sr, &ch);
-            if (samples.isEmpty()) continue;
+            qint64 totalFloats = 0;
+            const float *srcData = m_trackModel->trackSourceData(i, s, &totalFloats, &sr, &ch);
+            if (!srcData || totalFloats <= 0 || ch <= 0) continue;
 
-            const qint64 frames = samples.size() / ch;
+            const qint64 frames = totalFloats / ch;
             const quint32 dataSize = quint32(frames * ch * 4);
             const quint32 wavSize = 44 + dataSize;
             const QString nameInTar = QString("sources/track%1_src%2.wav").arg(i).arg(s);
@@ -753,8 +770,8 @@ bool ProjectIO::save(const QString &path)
 
             f.write(wavHeader);
 
-            // Escribir datos float
-            f.write(reinterpret_cast<const char*>(samples.constData()), dataSize);
+            // Escribir datos float directamente desde mmap o heap
+            f.write(reinterpret_cast<const char*>(srcData), dataSize);
 
             // Padding del tar
             const int pad = (TAR_BLOCK - (wavSize % TAR_BLOCK)) % TAR_BLOCK;
@@ -842,7 +859,7 @@ bool ProjectIO::open(const QString &path)
     // Sincronizar metadata desde podcast.json del directorio padre.
     // Estructura: .../MiPodcast/Episodio1/MiPodcast.kutproj
     // → podcast.json está en .../MiPodcast/podcast.json
-    const QFileInfo fi(resolvedPath);
+    const QFileInfo fi(path);
     QDir episodeDir = fi.dir();            // .../MiPodcast/Episodio1
     QDir podcastDir(episodeDir);
     if (podcastDir.cdUp()) {               // .../MiPodcast
@@ -887,11 +904,14 @@ bool ProjectIO::open(const QString &path)
         }
     }
 
-    setCurrentPath(resolvedPath);
+    setCurrentPath(path);
     setDirty(false);
     if (m_trackModel) m_trackModel->freeFlatCaches();
+#if defined(Q_OS_LINUX)
+    malloc_trim(0);
+#endif
     emit projectLoaded();
-    qDebug() << "[ProjectIO] Proyecto cargado:" << resolvedPath;
+    qDebug() << "[ProjectIO] Proyecto cargado:" << path;
     return true;
 }
 
@@ -943,12 +963,12 @@ void ProjectIO::saveRecoveryBackup()
 
             if (m_trackModel->isSourceDirty(i, s) || !QFile::exists(wavPath)) {
                 int sr = 48000, ch = 2;
-                QVector<float> samples = m_trackModel->trackSourceSamples(i, s, &sr, &ch);
-                qDebug() << "[ProjectIO] Source dirty or WAV doesn't exist. Samples size:" << samples.size();
-                if (!samples.isEmpty()) {
-                    const qint64 frames = samples.size() / ch;
+                qint64 totalFloats = 0;
+                const float *srcData = m_trackModel->trackSourceData(i, s, &totalFloats, &sr, &ch);
+                if (srcData && totalFloats > 0 && ch > 0) {
+                    const qint64 frames = totalFloats / ch;
                     qDebug() << "[ProjectIO] Writing WAV backup of" << frames << "frames, sr" << sr << "ch" << ch;
-                    if (writeWavFloat32(wavPath, samples.constData(), frames, sr, ch)) {
+                    if (writeWavFloat32(wavPath, srcData, frames, sr, ch)) {
                         m_trackModel->setSourceDirty(i, s, false);
                         qDebug() << "[ProjectIO] WAV backup successful";
                     } else {

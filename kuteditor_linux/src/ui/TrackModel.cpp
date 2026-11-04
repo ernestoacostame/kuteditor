@@ -26,6 +26,11 @@
 #ifdef HAVE_SAMPLERATE
 #include <samplerate.h>
 #endif
+
+#if defined(Q_OS_MAC) || defined(HAVE_COREAUDIO)
+#include <AudioToolbox/AudioToolbox.h>
+#include <CoreFoundation/CoreFoundation.h>
+#endif
 #include <QThread>
 #include <QWaitCondition>
 
@@ -659,22 +664,16 @@ void TrackModel::rebuildFlatCache(const Track &t) const {
     if (c.muted)
       continue;
     const auto &src = t.sources[c.sourceIdx];
-    if (src.channels != ch)
-      continue;
+    const qint64 srcTotalFrames = src.channels > 0 ? (src.samplesSize() / src.channels) : 0;
     const qint64 copyN =
-        std::min<qint64>(c.length, (src.samplesVec().size() / ch) - c.sourceOffset);
-    if (copyN <= 0)
+        std::min<qint64>(c.length, srcTotalFrames - c.sourceOffset);
+    if (copyN <= 0 || c.sourceOffset < 0 || c.sourceOffset >= srcTotalFrames)
       continue;
 
     // Punteros al origen y destino
-    const float *srcBuf = src.samplesVec().constData() + c.sourceOffset * ch;
+    const float *srcBuf = src.samplesConstData() + c.sourceOffset * src.channels;
     float *dst = t.flatCache.data() + c.timelineStart * ch;
-    const qint64 totalSamples = copyN * ch;
-
-    // ---- Mezcla aditiva con fades aplicados directamente ----
-    // En vez de memcpy (que sobreescribe), sumamos el audio de cada
-    // clip al flatCache. Esto permite crossfades reales: en la zona
-    // de solapamiento, ambos clips contribuyen audio.
+    const int srcCh = src.channels;
 
     // Determinar wet/dry del denoiser si aplica
     const float *wetBuf = nullptr;
@@ -683,12 +682,40 @@ void TrackModel::rebuildFlatCache(const Track &t) const {
         t.fxChain->deNoiser()->enabled()) {
       denoiseMix = t.fxChain->deNoiser()->reduction();
       if (denoiseMix > 0.0f &&
-          src.processedVec().size() == src.samplesVec().size()) {
-        wetBuf = src.processedVec().constData() + c.sourceOffset * ch;
+          src.processedVec().size() == src.samplesSize()) {
+        wetBuf = src.processedVec().constData() + c.sourceOffset * src.channels;
       } else {
         denoiseMix = 0.0f;
       }
     }
+
+    auto getSrcSample = [&](qint64 frameIdx, int channelIdx) -> float {
+      float s = 0.0f;
+      if (srcCh == ch) {
+        s = srcBuf[frameIdx * srcCh + channelIdx];
+        if (wetBuf) {
+          s = s * (1.0f - denoiseMix) + wetBuf[frameIdx * srcCh + channelIdx] * denoiseMix;
+        }
+      } else if (srcCh == 1 && ch == 2) {
+        s = srcBuf[frameIdx];
+        if (wetBuf) {
+          s = s * (1.0f - denoiseMix) + wetBuf[frameIdx] * denoiseMix;
+        }
+      } else if (srcCh == 2 && ch == 1) {
+        s = 0.5f * (srcBuf[frameIdx * 2] + srcBuf[frameIdx * 2 + 1]);
+        if (wetBuf) {
+          float ws = 0.5f * (wetBuf[frameIdx * 2] + wetBuf[frameIdx * 2 + 1]);
+          s = s * (1.0f - denoiseMix) + ws * denoiseMix;
+        }
+      } else {
+        int cIdx = std::min(channelIdx, srcCh - 1);
+        s = srcBuf[frameIdx * srcCh + cIdx];
+        if (wetBuf) {
+          s = s * (1.0f - denoiseMix) + wetBuf[frameIdx * srcCh + cIdx] * denoiseMix;
+        }
+      }
+      return s;
+    };
 
     if (!c.envelope.isEmpty()) {
       // Envelope mode: add with envelope gain
@@ -718,11 +745,7 @@ void TrackModel::rebuildFlatCache(const Track &t) const {
           }
         }
         for (int k = 0; k < ch; ++k) {
-          float sample = srcBuf[i * ch + k];
-          if (wetBuf)
-            sample =
-                sample * (1.0f - denoiseMix) + wetBuf[i * ch + k] * denoiseMix;
-          dst[i * ch + k] += sample * g;
+          dst[i * ch + k] += getSrcSample(i, k) * g;
         }
       }
     } else {
@@ -735,40 +758,15 @@ void TrackModel::rebuildFlatCache(const Track &t) const {
       for (qint64 i = 0; i < fin; ++i) {
         const float g = float(i + 1) / float(fin) * cg;
         for (int k = 0; k < ch; ++k) {
-          float sample = srcBuf[i * ch + k];
-          if (wetBuf)
-            sample =
-                sample * (1.0f - denoiseMix) + wetBuf[i * ch + k] * denoiseMix;
-          dst[i * ch + k] += sample * g;
+          dst[i * ch + k] += getSrcSample(i, k) * g;
         }
       }
       // Sustain region (between fade-in and fade-out)
       const qint64 sustainN = (copyN - fout) - fin;
       if (sustainN > 0) {
-        const float *sPtr = srcBuf + fin * ch;
-        float *dPtr = dst + fin * ch;
-        const qint64 totalSustainSamples = sustainN * ch;
-        if (wetBuf) {
-          const float *wPtr = wetBuf + fin * ch;
-          const float dryMix = 1.0f - denoiseMix;
-          if (cg == 1.0f) {
-            for (qint64 i = 0; i < totalSustainSamples; ++i) {
-              dPtr[i] += sPtr[i] * dryMix + wPtr[i] * denoiseMix;
-            }
-          } else {
-            for (qint64 i = 0; i < totalSustainSamples; ++i) {
-              dPtr[i] += (sPtr[i] * dryMix + wPtr[i] * denoiseMix) * cg;
-            }
-          }
-        } else {
-          if (cg == 1.0f) {
-            for (qint64 i = 0; i < totalSustainSamples; ++i) {
-              dPtr[i] += sPtr[i];
-            }
-          } else {
-            for (qint64 i = 0; i < totalSustainSamples; ++i) {
-              dPtr[i] += sPtr[i] * cg;
-            }
+        for (qint64 i = fin; i < fin + sustainN; ++i) {
+          for (int k = 0; k < ch; ++k) {
+            dst[i * ch + k] += getSrcSample(i, k) * cg;
           }
         }
       }
@@ -777,11 +775,7 @@ void TrackModel::rebuildFlatCache(const Track &t) const {
         const float g = float(fout - i) / float(fout) * cg;
         const qint64 f = copyN - fout + i;
         for (int k = 0; k < ch; ++k) {
-          float sample = srcBuf[f * ch + k];
-          if (wetBuf)
-            sample =
-                sample * (1.0f - denoiseMix) + wetBuf[f * ch + k] * denoiseMix;
-          dst[f * ch + k] += sample * g;
+          dst[f * ch + k] += getSrcSample(f, k) * g;
         }
       }
     }
@@ -1017,15 +1011,25 @@ void TrackModel::clearRegion(int index, double startSec, double endSec) {
 
       const qint64 fromIdx = srcFrom * src.channels;
       const qint64 toIdx = srcTo * src.channels;
-      if (toIdx > src.samplesVec().size())
+      if (toIdx > src.samplesSize())
         continue;
 
-      std::fill(src.samplesVec().data() + fromIdx, src.samplesVec().data() + toIdx, 0.0f);
+      float *sData = src.samplesData();
+      if (sData) {
+        std::fill(sData + fromIdx, sData + toIdx, 0.0f);
+      }
 
       updateSourcePeaksInRange(src, srcFrom, srcTo);
       // Rebuild mipmap for modified source
-      if (src.mipmap)
-        src.mipmap->loadFromVector(src.samplesVec(), src.channels, src.sampleRate);
+      if (src.mipmap) {
+        if (src.isMmapped()) {
+          QVector<float> tmpView(src.samplesSize());
+          std::memcpy(tmpView.data(), src.samplesConstData(), src.samplesSize() * sizeof(float));
+          src.mipmap->loadFromVector(tmpView, src.channels, src.sampleRate);
+        } else {
+          src.mipmap->loadFromVector(src.samplesVec(), src.channels, src.sampleRate);
+        }
+      }
       src.isDirty = true;
     }
     invalidateFlatCache(t);
@@ -1308,7 +1312,7 @@ QVariantList TrackModel::clipPeaks(int trackIndex, int clipIndex,
     return out;
 
   const int ch = src.channels;
-  const qint64 totalSrcFrames = ch > 0 ? qint64(src.samplesVec().size()) / ch : 0;
+  const qint64 totalSrcFrames = ch > 0 ? qint64(src.samplesSize()) / ch : 0;
   const qint64 clipStart = c.sourceOffset;
   const qint64 clipEnd = c.sourceOffset + c.length;
 
@@ -1337,6 +1341,8 @@ QVariantList TrackModel::clipPeaks(int trackIndex, int clipIndex,
 
   out.reserve(numBins);
 
+  const float *sData = src.samplesConstData();
+
   for (int w = 0; w < numBins; ++w) {
     const qint64 wStart = clipStart + qint64(w) * c.length / numBins;
     const qint64 wEnd = clipStart + qint64(w + 1) * c.length / numBins;
@@ -1357,7 +1363,7 @@ QVariantList TrackModel::clipPeaks(int trackIndex, int clipIndex,
     float peak = 0.0f;
     for (qint64 f = wStart; f < safeEnd; ++f) {
       for (int ci = 0; ci < ch; ++ci) {
-        const float v = std::abs(src.samplesVec()[f * ch + ci]);
+        const float v = std::abs(sData[f * ch + ci]);
         if (v > peak)
           peak = v;
       }
@@ -1390,7 +1396,7 @@ QVariantList TrackModel::clipPeaksVisible(int trackIndex, int clipIndex,
     return out;
 
   const int ch = src.channels;
-  const qint64 totalSrcFrames = ch > 0 ? qint64(src.samplesVec().size()) / ch : 0;
+  const qint64 totalSrcFrames = ch > 0 ? qint64(src.samplesSize()) / ch : 0;
   const qint64 clipStart = c.sourceOffset;
 
   // Rango de frames visible dentro del clip
@@ -1409,6 +1415,8 @@ QVariantList TrackModel::clipPeaksVisible(int trackIndex, int clipIndex,
   const qint64 framesPerBin = visLen / numBins;
   const bool usePeakCache =
       (framesPerBin >= PEAK_WINDOW_FRAMES) && !src.peaks.isEmpty();
+
+  const float *sData = src.samplesConstData();
 
   for (int w = 0; w < numBins; ++w) {
     const qint64 wStart = visStart + qint64(w) * visLen / numBins;
@@ -1431,7 +1439,7 @@ QVariantList TrackModel::clipPeaksVisible(int trackIndex, int clipIndex,
       // Zoom alto o cache vacío: iterar samples crudos.
       for (qint64 f = wStart; f < safeEnd; ++f) {
         for (int ci = 0; ci < ch; ++ci) {
-          const float v = std::abs(src.samplesVec()[f * ch + ci]);
+          const float v = std::abs(sData[f * ch + ci]);
           if (v > peak)
             peak = v;
         }
@@ -1474,7 +1482,7 @@ QVariantList TrackModel::clipPeaksLive(int trackIndex, int clipIndex,
     return out;
 
   const int ch = src.channels;
-  const qint64 totalSrcFrames = ch > 0 ? qint64(src.samplesVec().size()) / ch : 0;
+  const qint64 totalSrcFrames = ch > 0 ? qint64(src.samplesSize()) / ch : 0;
   const qint64 clipStart = c.sourceOffset;
   const qint64 clipEnd = clipStart + c.length;
 
@@ -1485,6 +1493,8 @@ QVariantList TrackModel::clipPeaksLive(int trackIndex, int clipIndex,
   const int numBins = qCeil(c.length / framesPerBin);
   out.reserve(numBins);
 
+  const float *sData = src.samplesConstData();
+
   for (int w = 0; w < numBins; ++w) {
     const qint64 wStart = clipStart + qint64(w * framesPerBin);
     const qint64 wEnd = clipStart + qint64((w + 1) * framesPerBin);
@@ -1493,7 +1503,7 @@ QVariantList TrackModel::clipPeaksLive(int trackIndex, int clipIndex,
     float peak = 0.0f;
     for (qint64 f = wStart; f < safeEnd; ++f) {
       for (int ci = 0; ci < ch; ++ci) {
-        const float v = std::abs(src.samplesVec()[f * ch + ci]);
+        const float v = std::abs(sData[f * ch + ci]);
         if (v > peak)
           peak = v;
       }
@@ -1879,7 +1889,7 @@ bool TrackModel::trimClip(int trackIndex, int clipIndex, double deltaStartSec,
 
     const int sr = src.sampleRate > 0 ? src.sampleRate : 48000;
     const qint64 totalFrames =
-        src.channels > 0 ? src.samplesVec().size() / src.channels : 0;
+        src.channels > 0 ? src.samplesSize() / src.channels : 0;
 
     qint64 deltaStartFrames = qint64(std::llround(deltaStartSec * sr));
     qint64 deltaEndFrames = qint64(std::llround(deltaEndSec * sr));
@@ -2602,8 +2612,7 @@ void TrackModel::readMixSegment(int index, qint64 startFrame, int nFrames,
     if (c.timelineStart >= endFrame) break; // Los clips están ordenados
 
     const auto &src = t.sources[c.sourceIdx];
-    if (src.channels != ch) continue;
-    const qint64 srcTotalFrames = src.samplesSize() / ch;
+    const qint64 srcTotalFrames = src.channels > 0 ? (src.samplesSize() / src.channels) : 0;
 
     // Calcular el rango de solapamiento en coordenadas de línea temporal
     const qint64 ovStart = std::max(c.timelineStart, startFrame);
@@ -2617,8 +2626,9 @@ void TrackModel::readMixSegment(int index, qint64 startFrame, int nFrames,
     if (copyN <= 0 || srcOffset < 0 || srcOffset >= srcTotalFrames) continue;
 
     // Punteros al origen y destino
-    const float *srcBuf = src.samplesConstData() + srcOffset * ch;
+    const float *srcBuf = src.samplesConstData() + srcOffset * src.channels;
     float *dst = outBuf + (ovStart - startFrame) * ch;
+    const int srcCh = src.channels;
 
     // Determinar wet/dry del denoiser si aplica
     const float *wetBuf = nullptr;
@@ -2628,11 +2638,39 @@ void TrackModel::readMixSegment(int index, qint64 startFrame, int nFrames,
       denoiseMix = t.fxChain->deNoiser()->reduction();
       if (denoiseMix > 0.0f &&
           src.processedVec().size() == src.samplesSize()) {
-        wetBuf = src.processedVec().constData() + srcOffset * ch;
+        wetBuf = src.processedVec().constData() + srcOffset * src.channels;
       } else {
         denoiseMix = 0.0f;
       }
     }
+
+    auto getSrcSample = [&](qint64 frameIdx, int channelIdx) -> float {
+      float s = 0.0f;
+      if (srcCh == ch) {
+        s = srcBuf[frameIdx * srcCh + channelIdx];
+        if (wetBuf) {
+          s = s * (1.0f - denoiseMix) + wetBuf[frameIdx * srcCh + channelIdx] * denoiseMix;
+        }
+      } else if (srcCh == 1 && ch == 2) {
+        s = srcBuf[frameIdx];
+        if (wetBuf) {
+          s = s * (1.0f - denoiseMix) + wetBuf[frameIdx] * denoiseMix;
+        }
+      } else if (srcCh == 2 && ch == 1) {
+        s = 0.5f * (srcBuf[frameIdx * 2] + srcBuf[frameIdx * 2 + 1]);
+        if (wetBuf) {
+          float ws = 0.5f * (wetBuf[frameIdx * 2] + wetBuf[frameIdx * 2 + 1]);
+          s = s * (1.0f - denoiseMix) + ws * denoiseMix;
+        }
+      } else {
+        int cIdx = std::min(channelIdx, srcCh - 1);
+        s = srcBuf[frameIdx * srcCh + cIdx];
+        if (wetBuf) {
+          s = s * (1.0f - denoiseMix) + wetBuf[frameIdx * srcCh + cIdx] * denoiseMix;
+        }
+      }
+      return s;
+    };
 
     // Offset del frame dentro del clip (para calcular fades/envelope)
     const qint64 clipLocalStart = ovStart - c.timelineStart;
@@ -2665,10 +2703,7 @@ void TrackModel::readMixSegment(int index, qint64 startFrame, int nFrames,
           }
         }
         for (int k = 0; k < ch; ++k) {
-          float sample = srcBuf[i * ch + k];
-          if (wetBuf)
-            sample = sample * (1.0f - denoiseMix) + wetBuf[i * ch + k] * denoiseMix;
-          dst[i * ch + k] += sample * g;
+          dst[i * ch + k] += getSrcSample(i, k) * g;
         }
       }
     } else {
@@ -2692,10 +2727,7 @@ void TrackModel::readMixSegment(int index, qint64 startFrame, int nFrames,
         }
 
         for (int k = 0; k < ch; ++k) {
-          float sample = srcBuf[i * ch + k];
-          if (wetBuf)
-            sample = sample * (1.0f - denoiseMix) + wetBuf[i * ch + k] * denoiseMix;
-          dst[i * ch + k] += sample * g;
+          dst[i * ch + k] += getSrcSample(i, k) * g;
         }
       }
     }
@@ -2826,12 +2858,19 @@ void TrackModel::rebuildPeaks(int index) {
     Track &t = m_tracks[index];
     for (auto &src : t.sources) {
       const qint64 frames =
-          src.channels > 0 ? src.samplesVec().size() / src.channels : 0;
+          src.channels > 0 ? src.samplesSize() / src.channels : 0;
       src.peaks.clear();
       updateSourcePeaksInRange(src, 0, frames);
       // Also rebuild mipmap when peaks are rebuilt
-      if (src.mipmap)
-        src.mipmap->loadFromVector(src.samplesVec(), src.channels, src.sampleRate);
+      if (src.mipmap) {
+        if (src.isMmapped()) {
+          QVector<float> tmpView(src.samplesSize());
+          std::memcpy(tmpView.data(), src.samplesConstData(), src.samplesSize() * sizeof(float));
+          src.mipmap->loadFromVector(tmpView, src.channels, src.sampleRate);
+        } else {
+          src.mipmap->loadFromVector(src.samplesVec(), src.channels, src.sampleRate);
+        }
+      }
     }
   }
   emit trackPeaksUpdated(index);
@@ -2930,7 +2969,38 @@ QVector<float> TrackModel::trackSourceSamples(int trackIndex, int sourceIdx,
     *outSampleRate = src.sampleRate;
   if (outChannels)
     *outChannels = src.channels;
+  if (src.isMmapped()) {
+    QVector<float> vec(src.samplesSize());
+    std::memcpy(vec.data(), src.samplesConstData(), src.samplesSize() * sizeof(float));
+    return vec;
+  }
   return src.samplesVec();
+}
+
+const float *TrackModel::trackSourceData(int trackIndex, int sourceIdx,
+                                         qint64 *outSizeFloats,
+                                         int *outSampleRate,
+                                         int *outChannels) const {
+  QMutexLocker lock(&m_bufMutex);
+  if (outSampleRate)
+    *outSampleRate = 48000;
+  if (outChannels)
+    *outChannels = 2;
+  if (outSizeFloats)
+    *outSizeFloats = 0;
+  if (!isValidIndex(trackIndex))
+    return nullptr;
+  const Track &t = m_tracks[trackIndex];
+  if (sourceIdx < 0 || sourceIdx >= t.sources.size())
+    return nullptr;
+  const AudioSource &src = t.sources[sourceIdx];
+  if (outSampleRate)
+    *outSampleRate = src.sampleRate;
+  if (outChannels)
+    *outChannels = src.channels;
+  if (outSizeFloats)
+    *outSizeFloats = src.samplesSize();
+  return src.samplesConstData();
 }
 
 bool TrackModel::isSourceDirty(int trackIndex, int sourceIdx) const {
@@ -2987,11 +3057,13 @@ QVariantMap TrackModel::getSourceSamples(int trackIndex, int sourceIdx) const {
 
   const AudioSource &src = t.sources[sourceIdx];
 
-  // Convert QVector<float> to QVariantList for QML
+  // Convert samples to QVariantList for QML
+  const qint64 nSamples = src.samplesSize();
+  const float *sData = src.samplesConstData();
   QVariantList samplesList;
-  samplesList.reserve(src.samplesVec().size());
-  for (const float &sample : src.samplesVec()) {
-    samplesList.append(sample);
+  samplesList.reserve(std::min<qint64>(nSamples, 1000000));
+  for (qint64 i = 0; i < nSamples; ++i) {
+    samplesList.append(sData[i]);
   }
 
   result["samples"] = samplesList;
@@ -3052,7 +3124,7 @@ int TrackModel::addSourceToTrack(int trackIndex, const QVector<float> &samples,
     idx = t.sources.size() - 1;
     // Peaks del nuevo source
     const qint64 frames =
-        channels > 0 ? t.sources[idx].samplesVec().size() / channels : 0;
+        channels > 0 ? t.sources[idx].samplesSize() / channels : 0;
     updateSourcePeaksInRange(t.sources[idx], 0, frames);
     invalidateFlatCache(t);
   }
@@ -3253,7 +3325,7 @@ int TrackModel::mergeClips(int trackIndex, const QVariantList &clipIndices) {
         continue;
 
       const qint64 copyN = std::min<qint64>(
-          c.length, (src.samplesVec().size() / ch) - c.sourceOffset);
+          c.length, (src.samplesSize() / ch) - c.sourceOffset);
       if (copyN <= 0)
         continue;
 
@@ -3262,7 +3334,7 @@ int TrackModel::mergeClips(int trackIndex, const QVariantList &clipIndices) {
       float *dst = merged.data() + dstOffset * ch;
 
       // Copiar samples del source
-      std::memcpy(dst, src.samplesVec().constData() + c.sourceOffset * ch,
+      std::memcpy(dst, src.samplesConstData() + c.sourceOffset * ch,
                   sizeof(float) * copyN * ch);
 
       // Aplicar fades y gain (igual que rebuildFlatCache)
@@ -3434,15 +3506,16 @@ double TrackModel::computeTrackLoudnessDb(int trackIndex) const {
     const AudioSource &src = t.sources[c.sourceIdx];
     if (src.channels <= 0)
       continue;
-    const qint64 srcFrames = src.samplesVec().size() / src.channels;
+    const qint64 srcFrames = src.samplesSize() / src.channels;
     const qint64 from = c.sourceOffset;
     const qint64 to = std::min<qint64>(srcFrames, c.sourceOffset + c.length);
     if (to <= from)
       continue;
 
+    const float *sData = src.samplesConstData();
     for (qint64 f = from; f < to; ++f) {
       for (int ch = 0; ch < src.channels; ++ch) {
-        const float s = src.samplesVec()[f * src.channels + ch];
+        const float s = sData[f * src.channels + ch];
         sumSq += double(s) * double(s);
         ++sampleCount;
       }
@@ -3477,7 +3550,7 @@ double TrackModel::computeClipLoudnessLufs(int trackIndex,
 
   const int ch = src.channels;
   const int sr = src.sampleRate;
-  const qint64 srcFrames = src.samplesVec().size() / ch;
+  const qint64 srcFrames = src.samplesSize() / ch;
   const qint64 from = c.sourceOffset;
   const qint64 to = std::min<qint64>(srcFrames, c.sourceOffset + c.length);
   const qint64 clipFrames = to - from;
@@ -3524,9 +3597,10 @@ double TrackModel::computeClipLoudnessLufs(int trackIndex,
   // Pre-compute K-weighted squared samples
   QVector<double> kSq(clipFrames * ch, 0.0);
   const int useCh = std::min(ch, 2);
+  const float *sData = src.samplesConstData();
   for (qint64 i = 0; i < clipFrames; ++i) {
     for (int c2 = 0; c2 < useCh; ++c2) {
-      double x = src.samplesVec()[(from + i) * ch + c2];
+      double x = sData[(from + i) * ch + c2];
       // Pre-filter
       double yk = kb0 * x + kz1[c2];
       kz1[c2] = kb1 * x - ka1 * yk + kz2[c2];
@@ -3598,16 +3672,17 @@ double TrackModel::computeClipPeakDb(int trackIndex, int clipIndex) const {
   if (src.channels <= 0)
     return -120.0;
   const int ch = src.channels;
-  const qint64 srcFrames = src.samplesVec().size() / ch;
+  const qint64 srcFrames = src.samplesSize() / ch;
   const qint64 from = c.sourceOffset;
   const qint64 to = std::min<qint64>(srcFrames, c.sourceOffset + c.length);
   if (to <= from)
     return -120.0;
 
   float maxAbs = 0.0f;
+  const float *sData = src.samplesConstData();
   for (qint64 f = from; f < to; ++f) {
     for (int c2 = 0; c2 < ch; ++c2) {
-      const float a = std::abs(src.samplesVec()[f * ch + c2]);
+      const float a = std::abs(sData[f * ch + c2]);
       if (a > maxAbs)
         maxAbs = a;
     }
@@ -3633,14 +3708,18 @@ float TrackModel::bakeClipGain(int trackIndex, int clipIndex,
       return 1.0f;
     AudioSource &src = t.sources[c.sourceIdx];
     const int ch = src.channels;
-    const qint64 srcFrames = src.samplesVec().size() / ch;
+    const qint64 srcFrames = src.samplesSize() / ch;
     const qint64 from = c.sourceOffset;
     const qint64 to = std::min<qint64>(srcFrames, c.sourceOffset + c.length);
+
+    float *sData = src.samplesData();
+    if (!sData)
+      return 1.0f;
 
     // Multiplicar samples del rango del clip
     for (qint64 f = from; f < to; ++f) {
       for (int c2 = 0; c2 < ch; ++c2) {
-        src.samplesVec()[f * ch + c2] *= gainFactor;
+        sData[f * ch + c2] *= gainFactor;
       }
     }
 
@@ -3655,7 +3734,7 @@ float TrackModel::bakeClipGain(int trackIndex, int clipIndex,
       float maxPeak = 0.0f;
       for (qint64 f = from; f < to; ++f) {
         for (int c2 = 0; c2 < ch; ++c2) {
-          const float a = std::abs(src.samplesVec()[f * ch + c2]);
+          const float a = std::abs(sData[f * ch + c2]);
           if (a > maxPeak)
             maxPeak = a;
         }
@@ -3665,7 +3744,7 @@ float TrackModel::bakeClipGain(int trackIndex, int clipIndex,
         // Aplicar recorte estricto (hard-clipping) monotónico
         for (qint64 f = from; f < to; ++f) {
           for (int c2 = 0; c2 < ch; ++c2) {
-            float &s = src.samplesVec()[f * ch + c2];
+            float &s = sData[f * ch + c2];
             if (s > ceiling) {
               s = ceiling;
             } else if (s < -ceiling) {
@@ -3683,10 +3762,22 @@ float TrackModel::bakeClipGain(int trackIndex, int clipIndex,
 
     // Rebuild mipmap
     if (src.mipmap) {
-      src.mipmap->loadFromVector(src.samplesVec(), src.channels, src.sampleRate);
+      if (src.isMmapped()) {
+        QVector<float> tmpView(src.samplesSize());
+        std::memcpy(tmpView.data(), src.samplesConstData(), src.samplesSize() * sizeof(float));
+        src.mipmap->loadFromVector(tmpView, src.channels, src.sampleRate);
+      } else {
+        src.mipmap->loadFromVector(src.samplesVec(), src.channels, src.sampleRate);
+      }
     } else {
       src.mipmap = std::make_shared<AudioMipmap>();
-      src.mipmap->loadFromVector(src.samplesVec(), src.channels, src.sampleRate);
+      if (src.isMmapped()) {
+        QVector<float> tmpView(src.samplesSize());
+        std::memcpy(tmpView.data(), src.samplesConstData(), src.samplesSize() * sizeof(float));
+        src.mipmap->loadFromVector(tmpView, src.channels, src.sampleRate);
+      } else {
+        src.mipmap->loadFromVector(src.samplesVec(), src.channels, src.sampleRate);
+      }
     }
 
     invalidateFlatCache(t);
@@ -3742,19 +3833,35 @@ float TrackModel::bakeGainIntoSamples(int trackIndex) {
 
     // Multiplicar samples de todos los sources por oldGain.
     for (auto &src : t.sources) {
-      for (float &s : src.samplesVec())
-        s *= oldGain;
+      float *sData = src.samplesData();
+      const qint64 nSamples = src.samplesSize();
+      if (sData) {
+        for (qint64 sIdx = 0; sIdx < nSamples; ++sIdx)
+          sData[sIdx] *= oldGain;
+      }
       // Recalcular peaks del source completo.
       const qint64 frames =
-          src.channels > 0 ? src.samplesVec().size() / src.channels : 0;
+          src.channels > 0 ? src.samplesSize() / src.channels : 0;
       src.peaks.clear();
       updateSourcePeaksInRange(src, 0, frames);
       // Rebuild mipmap so the waveform reflects the new amplitudes.
       if (src.mipmap) {
-        src.mipmap->loadFromVector(src.samplesVec(), src.channels, src.sampleRate);
+        if (src.isMmapped()) {
+          QVector<float> tmpView(src.samplesSize());
+          std::memcpy(tmpView.data(), src.samplesConstData(), src.samplesSize() * sizeof(float));
+          src.mipmap->loadFromVector(tmpView, src.channels, src.sampleRate);
+        } else {
+          src.mipmap->loadFromVector(src.samplesVec(), src.channels, src.sampleRate);
+        }
       } else {
         src.mipmap = std::make_shared<AudioMipmap>();
-        src.mipmap->loadFromVector(src.samplesVec(), src.channels, src.sampleRate);
+        if (src.isMmapped()) {
+          QVector<float> tmpView(src.samplesSize());
+          std::memcpy(tmpView.data(), src.samplesConstData(), src.samplesSize() * sizeof(float));
+          src.mipmap->loadFromVector(tmpView, src.channels, src.sampleRate);
+        } else {
+          src.mipmap->loadFromVector(src.samplesVec(), src.channels, src.sampleRate);
+        }
       }
       src.isDirty = true;
     }
@@ -4051,11 +4158,12 @@ bool TrackModel::noiseProfileCapture(int trackIndex, int clipIndex,
 
   for (qint64 pos = frameStart; pos + NR_FFT_SIZE <= frameEnd; pos += hop) {
     // Mezclar canales a mono + ventana
+    const float *sData = src.samplesConstData();
     for (int i = 0; i < NR_FFT_SIZE; ++i) {
       const qint64 sIdx = (c.sourceOffset + pos + i) * ch;
       float mono = 0.0f;
       for (int ci = 0; ci < ch; ++ci)
-        mono += src.samplesVec()[sIdx + ci];
+        mono += sData[sIdx + ci];
       mono /= ch;
       re[i] = mono * window[i];
       im[i] = 0.0f;
@@ -4113,7 +4221,13 @@ bool TrackModel::noiseReduce(int trackIndex, int clipIndex, float reductionDb,
     return false;
 
   // Copy data required for background processing
-  QVector<float> samplesCopy = src.samplesVec();
+  QVector<float> samplesCopy;
+  if (src.isMmapped()) {
+    samplesCopy.resize(src.samplesSize());
+    std::memcpy(samplesCopy.data(), src.samplesConstData(), src.samplesSize() * sizeof(float));
+  } else {
+    samplesCopy = src.samplesVec();
+  }
   QVector<float> noiseProfileCopy = m_noiseProfile;
   const qint64 sourceOffset = c.sourceOffset;
   const qint64 clipLength = c.length;
@@ -4203,10 +4317,11 @@ bool TrackModel::noiseReduce(int trackIndex, int clipIndex, float reductionDb,
               return;
 
           AudioSource &src = t.sources[sourceIdx];
+          src.mmapBuffer.reset(); // Ahora reside en heap
           src.samples = std::make_shared<QVector<float>>(std::move(samplesCopy));
           src.isDirty = true;
 
-          const qint64 frames = src.channels > 0 ? src.samplesVec().size() / src.channels : 0;
+          const qint64 frames = src.channels > 0 ? src.samplesSize() / src.channels : 0;
           src.peaks.clear();
           weakThis->updateSourcePeaksInRange(src, 0, frames);
 
@@ -4238,8 +4353,115 @@ static QString findFfmpegExecutable() {
   if (QFile::exists(ffmpegPath)) {
     return ffmpegPath;
   }
+
+#ifdef Q_OS_MAC
+  const QStringList macPaths = {
+      "/opt/homebrew/bin/ffmpeg",
+      "/usr/local/bin/ffmpeg",
+      "/opt/local/bin/ffmpeg"
+  };
+  for (const QString &path : macPaths) {
+    if (QFile::exists(path)) {
+      return path;
+    }
+  }
+#endif
+
   return QStandardPaths::findExecutable("ffmpeg");
 }
+
+#if defined(Q_OS_MAC) || defined(HAVE_COREAUDIO)
+static bool readAudioFile_CoreAudio(const QString &path, QVector<float> &outSamples,
+                                    int &outSampleRate, int &outChannels) {
+  CFURLRef fileURL = QUrl::fromLocalFile(path).toCFURL();
+  if (!fileURL) return false;
+
+  ExtAudioFileRef audioFile = nullptr;
+  OSStatus status = ExtAudioFileOpenURL(fileURL, &audioFile);
+  CFRelease(fileURL);
+
+  if (status != noErr || !audioFile) {
+    qWarning() << "[CoreAudio] ExtAudioFileOpenURL falló para:" << path << "status:" << status;
+    return false;
+  }
+
+  AudioStreamBasicDescription fileFormat;
+  UInt32 propSize = sizeof(fileFormat);
+  status = ExtAudioFileGetProperty(audioFile, kExtAudioFileProperty_FileDataFormat, &propSize, &fileFormat);
+  if (status != noErr) {
+    qWarning() << "[CoreAudio] ExtAudioFileGetProperty FileDataFormat falló:" << status;
+    ExtAudioFileDispose(audioFile);
+    return false;
+  }
+
+  outSampleRate = (fileFormat.mSampleRate > 0) ? int(fileFormat.mSampleRate) : 48000;
+  outChannels = (fileFormat.mChannelsPerFrame > 0) ? int(fileFormat.mChannelsPerFrame) : 2;
+
+  AudioStreamBasicDescription clientFormat = {};
+  clientFormat.mSampleRate = outSampleRate;
+  clientFormat.mFormatID = kAudioFormatLinearPCM;
+  clientFormat.mFormatFlags = kAudioFormatFlagIsFloat | kAudioFormatFlagIsPacked;
+  clientFormat.mBitsPerChannel = 32;
+  clientFormat.mChannelsPerFrame = outChannels;
+  clientFormat.mBytesPerFrame = 4 * outChannels;
+  clientFormat.mFramesPerPacket = 1;
+  clientFormat.mBytesPerPacket = clientFormat.mBytesPerFrame;
+
+  status = ExtAudioFileSetProperty(audioFile, kExtAudioFileProperty_ClientDataFormat,
+                                   sizeof(clientFormat), &clientFormat);
+  if (status != noErr) {
+    qWarning() << "[CoreAudio] ExtAudioFileSetProperty ClientDataFormat falló:" << status;
+    ExtAudioFileDispose(audioFile);
+    return false;
+  }
+
+  SInt64 totalFrames = 0;
+  propSize = sizeof(totalFrames);
+  status = ExtAudioFileGetProperty(audioFile, kExtAudioFileProperty_FileLengthFrames,
+                                   &propSize, &totalFrames);
+  if (status != noErr || totalFrames <= 0) {
+    qWarning() << "[CoreAudio] ExtAudioFileGetProperty FileLengthFrames falló:" << status << "totalFrames:" << totalFrames;
+    ExtAudioFileDispose(audioFile);
+    return false;
+  }
+
+  outSamples.resize(totalFrames * outChannels);
+
+  constexpr UInt32 CHUNK_FRAMES = 32768;
+  UInt32 framesReadTotal = 0;
+
+  AudioBufferList bufferList;
+  bufferList.mNumberBuffers = 1;
+  bufferList.mBuffers[0].mNumberChannels = outChannels;
+
+  while (framesReadTotal < UInt32(totalFrames)) {
+    UInt32 framesToRead = std::min(CHUNK_FRAMES, UInt32(totalFrames) - framesReadTotal);
+    bufferList.mBuffers[0].mDataByteSize = framesToRead * outChannels * sizeof(float);
+    bufferList.mBuffers[0].mData = outSamples.data() + (framesReadTotal * outChannels);
+
+    UInt32 framesReadThisChunk = framesToRead;
+    status = ExtAudioFileRead(audioFile, &framesReadThisChunk, &bufferList);
+    if (status != noErr) {
+      qWarning() << "[CoreAudio] Error leyendo frames:" << status;
+      break;
+    }
+    if (framesReadThisChunk == 0) break;
+    framesReadTotal += framesReadThisChunk;
+  }
+
+  ExtAudioFileDispose(audioFile);
+
+  if (framesReadTotal == 0) {
+    qWarning() << "[CoreAudio] 0 frames leídos.";
+    return false;
+  }
+
+  outSamples.resize(framesReadTotal * outChannels);
+  qDebug() << "[CoreAudio] Decodificado exitoso:" << framesReadTotal << "frames ("
+           << outChannels << "ch," << outSampleRate << "Hz) de:" << path;
+  return true;
+}
+#endif
 
 // Lee un WAV float32 o PCM int16/int24 a float. Simple, en el mismo módulo
 // para evitar dependencia cruzada con ProjectIO.
@@ -4408,6 +4630,12 @@ bool TrackModel::importAudioFile(int trackIndex, const QString &filePath,
     if (ext == "wav" || ext == "wave") {
       ok = readAudioFile_WAV(resolvedPath, samples, sr, ch);
     }
+
+#if defined(Q_OS_MAC) || defined(HAVE_COREAUDIO)
+    if (!ok) {
+      ok = readAudioFile_CoreAudio(resolvedPath, samples, sr, ch);
+    }
+#endif
 
     // Fallback: si falla WAV nativo o no es WAV, usar ffmpeg para decodificar
     // a un WAV temporal float32 estéreo 48kHz y leerlo.
@@ -4902,9 +5130,9 @@ void TrackModel::checkRNNoiseProcessing(int trackIndex) {
   bool startedAny = false;
   for (int s = 0; s < t.sources.size(); ++s) {
     AudioSource &src = t.sources[s];
-    if (src.samplesVec().isEmpty())
+    if (src.samplesSize() == 0)
       continue;
-    if (src.processedVec().size() == src.samplesVec().size())
+    if (src.processedVec().size() == src.samplesSize())
       continue; // already processed
 
     int workerKey = trackIndex * 1000 + s;
@@ -4923,7 +5151,15 @@ void TrackModel::checkRNNoiseProcessing(int trackIndex) {
                 w->deleteLater();
             });
 
-    worker->processOffline(trackIndex, s, src.samplesVec(), src.sampleRate,
+    QVector<float> inSamples;
+    if (src.isMmapped()) {
+      inSamples.resize(src.samplesSize());
+      std::memcpy(inSamples.data(), src.samplesConstData(), src.samplesSize() * sizeof(float));
+    } else {
+      inSamples = src.samplesVec();
+    }
+
+    worker->processOffline(trackIndex, s, inSamples, src.sampleRate,
                            src.channels);
     startedAny = true;
   }
@@ -5011,7 +5247,7 @@ int TrackModel::deClickSelection(int trackIndex, double startSec, double endSec,
   for (auto &src : t.sources) {
     if (src.channels != ch) continue;
 
-    qint64 srcFrames = src.samplesVec().size() / ch;
+    qint64 srcFrames = src.samplesSize() / ch;
 
     for (const auto &clip : t.clips) {
       if (clip.sourceIdx < 0 || &t.sources[clip.sourceIdx] != &src) continue;
@@ -5035,8 +5271,10 @@ int TrackModel::deClickSelection(int trackIndex, double startSec, double endSec,
       int minW = 2;
       int margin = 2;
 
+      float *x = src.samplesData();
+      if (!x) continue;
+
       for (int c2 = 0; c2 < ch; ++c2) {
-        float *x = src.samplesVec().data();
         qint64 offset = fromSourceOffset;
 
         double ema = 0.0;
@@ -5111,7 +5349,13 @@ int TrackModel::deClickSelection(int trackIndex, double startSec, double endSec,
       updateSourcePeaksInRange(src, fromSourceOffset, toSourceOffset);
 
       if (src.mipmap) {
-        src.mipmap->loadFromVector(src.samplesVec(), src.channels, src.sampleRate);
+        if (src.isMmapped()) {
+          QVector<float> tmpView(src.samplesSize());
+          std::memcpy(tmpView.data(), src.samplesConstData(), src.samplesSize() * sizeof(float));
+          src.mipmap->loadFromVector(tmpView, src.channels, src.sampleRate);
+        } else {
+          src.mipmap->loadFromVector(src.samplesVec(), src.channels, src.sampleRate);
+        }
       }
       src.isDirty = true;
     }
