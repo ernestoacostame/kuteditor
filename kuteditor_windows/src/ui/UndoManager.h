@@ -83,6 +83,8 @@ public:
                                                 const QVariantList &snapshotsWithTrack,
                                                 double timelineStartSec,
                                                 bool ripple = false);
+    Q_INVOKABLE void pasteClipboard(int targetTrackIndex, double timelineStartSec,
+                                    bool ripple = false);
 
     Q_INVOKABLE void renameTrack(int trackIndex, const QString &newName);
     Q_INVOKABLE void setGain(int trackIndex, float newGain);

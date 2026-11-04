@@ -734,12 +734,23 @@ ApplicationWindow {
         clipboardClips = []
 
         if (lastSelection === "clips" && selectedClips.length > 0) {
+            TrackModel.copyClips(selectedClips)
             clipboardClips = selectedClips.map(sc => ({
                 sourceTrack: sc.track,
                 clipIndex: sc.clip
             }))
-        } else if (lastSelection === "region" || lastSelection === "trackRegions") {
+        } else if ((lastSelection === "region" || hasSelection) && hasSelection) {
             clipboardSnapshots = _getRegionSnapshots()
+            TrackModel.copyRegion(selStart, selEnd, selectedTracks)
+        } else if ((lastSelection === "trackRegions" || hasTrackRegions) && hasTrackRegions) {
+            clipboardSnapshots = _getRegionSnapshots()
+            TrackModel.copyTrackRegions(trackRegions)
+        } else if (selectedTracks.length > 0) {
+            TrackModel.copyTracks(selectedTracks)
+            clipboardClips = selectedTracks.map(t => ({ sourceTrack: t, clipIndex: 0 }))
+        } else if (selectedTrack >= 0) {
+            TrackModel.copyTracks([selectedTrack])
+            clipboardClips = [{ sourceTrack: selectedTrack, clipIndex: 0 }]
         }
     }
 
@@ -748,34 +759,19 @@ ApplicationWindow {
         clipboardClips = []
         clipboardIsCut = true
 
-        if (lastSelection === "clips" && selectedClips.length > 0) {
-            var snaps = []
-            for (var i = 0; i < selectedClips.length; i++) {
-                var sc = selectedClips[i]
-                var snap = TrackModel.clipSnapshot(sc.track, sc.clip)
-                if (snap && (snap.length !== undefined ? snap.length > 0 : Object.keys(snap).length > 0)) {
-                    snaps.push({ snapshot: snap, sourceTrack: sc.track })
-                }
-            }
-            clipboardSnapshots = snaps
-            clipboardClips = selectedClips.map(sc => ({
-                sourceTrack: sc.track,
-                clipIndex: sc.clip
-            }))
-            deleteSelected()
-        } else if (lastSelection === "region" || lastSelection === "trackRegions") {
-            clipboardSnapshots = _getRegionSnapshots()
-            deleteSelected()
-        }
+        copySelectedClips()
+        deleteSelected()
     }
 
     function pasteClips() {
-        if (clipboardClips.length === 0 && clipboardSnapshots.length === 0) return
+        if (!TrackModel.hasClipboard && clipboardClips.length === 0 && clipboardSnapshots.length === 0) return
 
         var targetTrack = root.selectedTrack >= 0 ? root.selectedTrack : 0
         var ph = AudioEngine.currentTime
 
-        if (clipboardSnapshots.length > 0) {
+        if (TrackModel.hasClipboard) {
+            UndoManager.pasteClipboard(targetTrack, ph, true)
+        } else if (clipboardSnapshots.length > 0) {
             // Pegar desde snapshots (resultado de cortar).
             UndoManager.pasteMultipleClipSnapshots(targetTrack, clipboardSnapshots, ph, true)
         } else {
@@ -1052,19 +1048,19 @@ ApplicationWindow {
     Shortcut {
         sequences: [StandardKey.Copy]
         context: Qt.ApplicationShortcut
-        enabled: root.selectedClips.length > 0 || root.hasSelection || root.hasTrackRegions
+        enabled: root.selectedClips.length > 0 || root.hasSelection || root.hasTrackRegions || root.selectedTracks.length > 0 || root.selectedTrack >= 0
         onActivated: root.copySelectedClips()
     }
     Shortcut {
         sequences: [StandardKey.Cut]
         context: Qt.ApplicationShortcut
-        enabled: root.selectedClips.length > 0 || root.hasSelection || root.hasTrackRegions
+        enabled: root.selectedClips.length > 0 || root.hasSelection || root.hasTrackRegions || root.selectedTracks.length > 0 || root.selectedTrack >= 0
         onActivated: root.cutSelectedClips()
     }
     Shortcut {
         sequences: [StandardKey.Paste]
         context: Qt.ApplicationShortcut
-        enabled: root.clipboardClips.length > 0 || root.clipboardSnapshots.length > 0
+        enabled: TrackModel.hasClipboard || root.clipboardClips.length > 0 || root.clipboardSnapshots.length > 0
         onActivated: root.pasteClips()
     }
     Shortcut {
@@ -2183,13 +2179,13 @@ ApplicationWindow {
                     }
                     Platform.MenuSeparator {}
                     Platform.MenuItem {
-                        text: qsTr("Copiar clips seleccionados")
-                        enabled: root.selectedClips.length > 0
+                        text: qsTr("Copiar pistas / clips seleccionados")
+                        enabled: root.selectedClips.length > 0 || root.selectedTracks.length > 0 || root.selectedTrack >= 0 || root.hasSelection || root.hasTrackRegions
                         onTriggered: root.copySelectedClips()
                     }
                     Platform.MenuItem {
-                        text: qsTr("Pegar clips")
-                        enabled: root.clipboardClips.length > 0
+                        text: qsTr("Pegar pistas / clips")
+                        enabled: TrackModel.hasClipboard || root.clipboardClips.length > 0 || root.clipboardSnapshots.length > 0
                         onTriggered: root.pasteClips()
                     }
                     Platform.MenuItem {
@@ -2379,13 +2375,13 @@ ApplicationWindow {
             }
             IntegratedMenuSeparator {}
             IntegratedMenuItem {
-                text: qsTr("Copiar clips seleccionados")
-                enabled: root.selectedClips.length > 0
+                text: qsTr("Copiar pistas / clips seleccionados")
+                enabled: root.selectedClips.length > 0 || root.selectedTracks.length > 0 || root.selectedTrack >= 0 || root.hasSelection || root.hasTrackRegions
                 onTriggered: root.copySelectedClips()
             }
             IntegratedMenuItem {
-                text: qsTr("Pegar clips")
-                enabled: root.clipboardClips.length > 0
+                text: qsTr("Pegar pistas / clips")
+                enabled: TrackModel.hasClipboard || root.clipboardClips.length > 0 || root.clipboardSnapshots.length > 0
                 onTriggered: root.pasteClips()
             }
             IntegratedMenuItem {
@@ -2547,13 +2543,13 @@ ApplicationWindow {
             Rectangle { width: 1; height: 24; color: root.divider }
 
             // --- Edición ---
-            ToolBtn { ico: Icons.cut; tip: qsTr("Cortar"); enabled: root.selectedClips.length > 0 || root.hasSelection || root.hasTrackRegions
+            ToolBtn { ico: Icons.cut; tip: qsTr("Cortar"); enabled: root.selectedClips.length > 0 || root.hasSelection || root.hasTrackRegions || root.selectedTracks.length > 0 || root.selectedTrack >= 0
                 onClicked: root.cutSelectedClips()
             }
-            ToolBtn { ico: Icons.copy; tip: qsTr("Copiar (Ctrl+C)"); enabled: root.selectedClips.length > 0 || root.hasSelection || root.hasTrackRegions
+            ToolBtn { ico: Icons.copy; tip: qsTr("Copiar (Ctrl+C)"); enabled: root.selectedClips.length > 0 || root.hasSelection || root.hasTrackRegions || root.selectedTracks.length > 0 || root.selectedTrack >= 0
                 onClicked: root.copySelectedClips()
             }
-            ToolBtn { ico: Icons.paste; tip: qsTr("Pegar (Ctrl+V)"); enabled: root.clipboardClips.length > 0 || root.clipboardSnapshots.length > 0
+            ToolBtn { ico: Icons.paste; tip: qsTr("Pegar (Ctrl+V)"); enabled: TrackModel.hasClipboard || root.clipboardClips.length > 0 || root.clipboardSnapshots.length > 0
                 onClicked: root.pasteClips()
             }
             ToolBtn {

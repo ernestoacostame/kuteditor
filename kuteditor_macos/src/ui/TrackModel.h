@@ -34,6 +34,7 @@ class TrackModel : public QAbstractListModel {
   Q_OBJECT
   Q_PROPERTY(int count READ count NOTIFY countChanged)
   Q_PROPERTY(int armedCount READ armedCount NOTIFY armedChanged)
+  Q_PROPERTY(bool hasClipboard READ hasClipboard NOTIFY hasClipboardChanged)
   Q_PROPERTY(
       bool hasNoiseProfile READ hasNoiseProfile NOTIFY noiseProfileChanged)
   Q_PROPERTY(QVariantList noiseProfileMagnitudes READ noiseProfileMagnitudes
@@ -105,6 +106,16 @@ public:
     QVector<Clip> clips;
   };
 
+  struct ClipboardTrack {
+    QString name;
+    QColor color;
+    float gain = 1.0f;
+    float pan = 0.0f;
+    int originalTrackIndex = 0;
+    QVector<AudioSource> sources;
+    QVector<Clip> clips;
+  };
+
   explicit TrackModel(QObject *parent = nullptr);
 
   int rowCount(const QModelIndex &parent = QModelIndex()) const override;
@@ -114,7 +125,7 @@ public:
                int role) override;
   QHash<int, QByteArray> roleNames() const override;
 
-  Q_INVOKABLE void addTrack(const QString &name);
+  Q_INVOKABLE void addTrack(const QString &name, const QColor &color = QColor());
   Q_INVOKABLE void insertTrackAt(int index, const QString &name);
   Q_INVOKABLE void removeTrack(int index);
   Q_INVOKABLE void updateTrackColor(int index, const QColor &color);
@@ -132,6 +143,17 @@ public:
   Q_INVOKABLE QVariantMap getTrackData(int index) const;
   Q_INVOKABLE void clearAudio(int index);
   Q_INVOKABLE TrackFxChain *trackFxChain(int index);
+
+  // --- Clipboard persistente (soporta copiar/pegar entre proyectos) ---
+  Q_INVOKABLE bool copyTracks(const QVariantList &trackIndices);
+  Q_INVOKABLE bool copyClips(const QVariantList &clipsList);
+  Q_INVOKABLE bool copyRegion(double startSec, double endSec, const QVariantList &trackIndices);
+  Q_INVOKABLE bool copyTrackRegions(const QVariantMap &regions);
+  Q_INVOKABLE bool hasClipboard() const { return !m_clipboardTracks.isEmpty(); }
+  Q_INVOKABLE int clipboardTrackCount() const { return m_clipboardTracks.size(); }
+  Q_INVOKABLE void clearClipboard();
+  const QVector<ClipboardTrack>& clipboardTracks() const { return m_clipboardTracks; }
+  int pasteClipboardInternal(int targetTrackIndex, double timelineStartSec, bool ripple);
 
   int count() const { return m_tracks.size(); }
   int armedCount() const;
@@ -481,6 +503,7 @@ public:
 signals:
   void countChanged();
   void armedChanged();
+  void hasClipboardChanged();
   void trackDeviceChanged(int index, const QString &deviceId);
   void trackArmedChanged(int index, bool armed);
   void trackPeaksUpdated(int index);
@@ -546,6 +569,7 @@ private:
   void emitRowChanged(int row, const QVector<int> &roles);
 
   QVector<Track> m_tracks;
+  QVector<ClipboardTrack> m_clipboardTracks;
 
   // Noise Reduction: perfil espectral (magnitudes promedio por bin FFT)
   QVector<float> m_noiseProfile;

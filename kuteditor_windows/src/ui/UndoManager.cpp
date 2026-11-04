@@ -1708,8 +1708,8 @@ void UndoManager::copyMultipleClipsToTrack(const QVariantList &clipsToCopy,
                                            bool ripple) {
   if (!m_trackModel || clipsToCopy.isEmpty())
     return;
-  if (targetTrackIndex < 0 || targetTrackIndex >= m_trackModel->count())
-    return;
+  if (targetTrackIndex < 0)
+    targetTrackIndex = 0;
 
   // 1. Find min source track index to calculate relative offsets
   int minSrcTrack = std::numeric_limits<int>::max();
@@ -1731,22 +1731,33 @@ void UndoManager::copyMultipleClipsToTrack(const QVariantList &clipsToCopy,
   // 3. Map destination tracks and save snapshots of destination tracks
   QMap<int, int> srcToDst;
   QSet<int> affectedDstTracks;
+  int maxDstTrack = targetTrackIndex;
   for (auto it = clipsBySrcTrack.constBegin(); it != clipsBySrcTrack.constEnd(); ++it) {
     int srcTrack = it.key();
-    int dstTrack = std::min(m_trackModel->count() - 1, targetTrackIndex + (srcTrack - minSrcTrack));
+    int dstTrack = targetTrackIndex + (srcTrack - minSrcTrack);
+    if (dstTrack > maxDstTrack)
+      maxDstTrack = dstTrack;
     srcToDst[srcTrack] = dstTrack;
     affectedDstTracks.insert(dstTrack);
   }
 
+  const int initialTrackCount = m_trackModel->count();
+  const int neededTrackCount = maxDstTrack + 1;
+
   // Save states of all destination tracks before pasting
   QMap<int, QVariant> dstStatesBefore;
   for (int dstTrack : affectedDstTracks) {
-    dstStatesBefore[dstTrack] = m_trackModel->saveTrackAudioState(dstTrack);
+    if (dstTrack < initialTrackCount) {
+      dstStatesBefore[dstTrack] = m_trackModel->saveTrackAudioState(dstTrack);
+    }
   }
 
-  auto doRedo = [this, clipsBySrcTrack, srcToDst, timelineStartSec, ripple]() {
+  auto doRedo = [this, clipsBySrcTrack, srcToDst, timelineStartSec, ripple, neededTrackCount]() {
     if (!m_trackModel)
       return;
+    while (m_trackModel->count() < neededTrackCount) {
+      m_trackModel->addTrack(tr("Pista %1").arg(m_trackModel->count() + 1));
+    }
     // Copy clips track-by-track
     for (auto it = clipsBySrcTrack.constBegin(); it != clipsBySrcTrack.constEnd(); ++it) {
       int srcTrack = it.key();
@@ -1755,12 +1766,15 @@ void UndoManager::copyMultipleClipsToTrack(const QVariantList &clipsToCopy,
     }
   };
 
-  auto doUndo = [this, affectedDstTracks, dstStatesBefore]() {
+  auto doUndo = [this, dstStatesBefore, initialTrackCount]() {
     if (!m_trackModel)
       return;
     // Restore original track audio states
-    for (int dstTrack : affectedDstTracks) {
-      m_trackModel->restoreTrackAudioState(dstTrack, dstStatesBefore[dstTrack]);
+    for (auto it = dstStatesBefore.constBegin(); it != dstStatesBefore.constEnd(); ++it) {
+      m_trackModel->restoreTrackAudioState(it.key(), it.value());
+    }
+    for (int k = m_trackModel->count() - 1; k >= initialTrackCount; --k) {
+      m_trackModel->removeTrack(k);
     }
   };
 
@@ -1775,8 +1789,8 @@ void UndoManager::pasteMultipleClipSnapshots(int targetTrackIndex,
                                              bool ripple) {
   if (!m_trackModel || snapshotsWithTrack.isEmpty())
     return;
-  if (targetTrackIndex < 0 || targetTrackIndex >= m_trackModel->count())
-    return;
+  if (targetTrackIndex < 0)
+    targetTrackIndex = 0;
 
   // 1. Find min source track index to calculate relative offsets
   int minSrcTrack = std::numeric_limits<int>::max();
@@ -1788,24 +1802,36 @@ void UndoManager::pasteMultipleClipSnapshots(int targetTrackIndex,
 
   // 2. Group snapshots by destination track index
   QMap<int, QVariantList> snapsByDstTrack;
+  int maxDstTrack = targetTrackIndex;
   for (const QVariant &v : snapshotsWithTrack) {
     QVariantMap m = v.toMap();
     int srcTrack = m.value("sourceTrack").toInt();
     QVariantMap snap = m.value("snapshot").toMap();
-    int dstTrack = std::min(m_trackModel->count() - 1, targetTrackIndex + (srcTrack - minSrcTrack));
+    int dstTrack = targetTrackIndex + (srcTrack - minSrcTrack);
+    if (dstTrack > maxDstTrack)
+      maxDstTrack = dstTrack;
     snapsByDstTrack[dstTrack].append(snap);
   }
+
+  const int initialTrackCount = m_trackModel->count();
+  const int neededTrackCount = maxDstTrack + 1;
 
   // Save states of all affected destination tracks
   QMap<int, QVariant> dstStatesBefore;
   for (auto it = snapsByDstTrack.constBegin(); it != snapsByDstTrack.constEnd(); ++it) {
-    dstStatesBefore[it.key()] = m_trackModel->saveTrackAudioState(it.key());
+    if (it.key() < initialTrackCount) {
+      dstStatesBefore[it.key()] = m_trackModel->saveTrackAudioState(it.key());
+    }
   }
 
   // Redo: paste snapshots to each destination track
-  auto doRedo = [this, snapsByDstTrack, timelineStartSec, ripple]() {
+  auto doRedo = [this, snapsByDstTrack, timelineStartSec, ripple, neededTrackCount]() {
     if (!m_trackModel)
       return;
+
+    while (m_trackModel->count() < neededTrackCount) {
+      m_trackModel->addTrack(tr("Pista %1").arg(m_trackModel->count() + 1));
+    }
 
     for (auto it = snapsByDstTrack.constBegin(); it != snapsByDstTrack.constEnd(); ++it) {
       int dstTrack = it.key();
@@ -1836,15 +1862,115 @@ void UndoManager::pasteMultipleClipSnapshots(int targetTrackIndex,
     }
   };
 
-  auto doUndo = [this, dstStatesBefore]() {
+  auto doUndo = [this, dstStatesBefore, initialTrackCount]() {
     if (!m_trackModel)
       return;
     for (auto it = dstStatesBefore.constBegin(); it != dstStatesBefore.constEnd(); ++it) {
       m_trackModel->restoreTrackAudioState(it.key(), it.value());
     }
+    for (int k = m_trackModel->count() - 1; k >= initialTrackCount; --k) {
+      m_trackModel->removeTrack(k);
+    }
   };
 
   m_stack.push(new LambdaCommand(ripple ? tr("Pegar múltiples clips (ripple)")
                                         : tr("Pegar múltiples clips"),
+                                 doRedo, doUndo));
+}
+
+void UndoManager::pasteClipboard(int targetTrackIndex, double timelineStartSec,
+                                 bool ripple) {
+  if (!m_trackModel || !m_trackModel->hasClipboard())
+    return;
+
+  const auto &clipTracks = m_trackModel->clipboardTracks();
+  if (clipTracks.isEmpty())
+    return;
+
+  if (targetTrackIndex < 0)
+    targetTrackIndex = 0;
+
+  // 1. Encontrar pista mínima para calcular offset relativo
+  int minOrigTrack = std::numeric_limits<int>::max();
+  for (const auto &ct : clipTracks) {
+    if (ct.originalTrackIndex < minOrigTrack)
+      minOrigTrack = ct.originalTrackIndex;
+  }
+
+  // 2. Determinar la cantidad total de pistas necesarias
+  int maxDstTrack = targetTrackIndex;
+  for (const auto &ct : clipTracks) {
+    int dst = targetTrackIndex + (ct.originalTrackIndex - minOrigTrack);
+    if (dst > maxDstTrack)
+      maxDstTrack = dst;
+  }
+
+  const int initialTrackCount = m_trackModel->count();
+  const int neededTrackCount = maxDstTrack + 1;
+
+  // Guardar metadata de pistas a crear por si no existen
+  struct TrackMeta {
+    QString name;
+    QColor color;
+  };
+  QMap<int, TrackMeta> metaForNewTracks;
+  for (int k = initialTrackCount; k < neededTrackCount; ++k) {
+    TrackMeta tm;
+    tm.name = tr("Pista %1").arg(k + 1);
+    for (const auto &ct : clipTracks) {
+      if (targetTrackIndex + (ct.originalTrackIndex - minOrigTrack) == k) {
+        if (!ct.name.isEmpty()) tm.name = ct.name;
+        tm.color = ct.color;
+        break;
+      }
+    }
+    metaForNewTracks[k] = tm;
+  }
+
+  // Guardar audio states de las pistas de destino que ya existían
+  QMap<int, QVariant> dstStatesBefore;
+  for (const auto &ct : clipTracks) {
+    int dst = targetTrackIndex + (ct.originalTrackIndex - minOrigTrack);
+    if (dst < initialTrackCount && !dstStatesBefore.contains(dst)) {
+      dstStatesBefore[dst] = m_trackModel->saveTrackAudioState(dst);
+    }
+  }
+
+  auto doRedo = [this, targetTrackIndex, timelineStartSec, ripple, neededTrackCount, metaForNewTracks]() {
+    if (!m_trackModel)
+      return;
+
+    // Crear pistas necesarias si faltan
+    while (m_trackModel->count() < neededTrackCount) {
+      int idx = m_trackModel->count();
+      QString name = tr("Pista %1").arg(idx + 1);
+      QColor color;
+      if (metaForNewTracks.contains(idx)) {
+        name = metaForNewTracks[idx].name;
+        color = metaForNewTracks[idx].color;
+      }
+      m_trackModel->addTrack(name, color);
+    }
+
+    m_trackModel->pasteClipboardInternal(targetTrackIndex, timelineStartSec, ripple);
+  };
+
+  auto doUndo = [this, initialTrackCount, dstStatesBefore]() {
+    if (!m_trackModel)
+      return;
+
+    // Restaurar pistas que ya existían antes del pegado
+    for (auto it = dstStatesBefore.constBegin(); it != dstStatesBefore.constEnd(); ++it) {
+      m_trackModel->restoreTrackAudioState(it.key(), it.value());
+    }
+
+    // Eliminar las pistas que fueron creadas por el pegado (orden inverso)
+    for (int k = m_trackModel->count() - 1; k >= initialTrackCount; --k) {
+      m_trackModel->removeTrack(k);
+    }
+  };
+
+  m_stack.push(new LambdaCommand(ripple ? tr("Pegar portapapeles (ripple)")
+                                        : tr("Pegar portapapeles"),
                                  doRedo, doUndo));
 }

@@ -355,16 +355,20 @@ void TrackModel::emitRowChanged(int row, const QVector<int> &roles) {
 // ============================================================================
 //  Mutaciones de pistas
 // ============================================================================
-void TrackModel::addTrack(const QString &name) {
+void TrackModel::addTrack(const QString &name, const QColor &color) {
   beginInsertRows(QModelIndex(), m_tracks.size(), m_tracks.size());
   Track t;
   t.name = name;
-  // Paleta cíclica de colores para que se distingan.
-  static const QColor palette[] = {QColor("#e74c3c"), QColor("#3498db"),
-                                   QColor("#2ecc71"), QColor("#f39c12"),
-                                   QColor("#9b59b6"), QColor("#1abc9c"),
-                                   QColor("#e67e22"), QColor("#34495e")};
-  t.color = palette[m_tracks.size() % 8];
+  if (color.isValid()) {
+    t.color = color;
+  } else {
+    // Paleta cíclica de colores para que se distingan.
+    static const QColor palette[] = {QColor("#e74c3c"), QColor("#3498db"),
+                                     QColor("#2ecc71"), QColor("#f39c12"),
+                                     QColor("#9b59b6"), QColor("#1abc9c"),
+                                     QColor("#e67e22"), QColor("#34495e")};
+    t.color = palette[m_tracks.size() % 8];
+  }
   t.fxChain = new TrackFxChain(this);
   connect(t.fxChain, &TrackFxChain::changed, this, [this, name]() {
     // Find track index by name or just iterate
@@ -2027,6 +2031,430 @@ int TrackModel::copyClipToTrack(int srcTrackIndex,
     emit trackPeaksUpdated(dstTrackIndex);
   }
   return copied;
+}
+
+// ============================================================================
+//  Clipboard persistente (copiar / cortar / pegar entre proyectos y pistas)
+// ============================================================================
+
+bool TrackModel::copyTracks(const QVariantList &trackIndices) {
+  QMutexLocker lock(&m_bufMutex);
+  m_clipboardTracks.clear();
+  if (trackIndices.isEmpty()) {
+    lock.unlock();
+    emit hasClipboardChanged();
+    return false;
+  }
+
+  QList<int> sortedIndices;
+  for (const QVariant &v : trackIndices) {
+    int idx = v.toInt();
+    if (isValidIndex(idx) && !sortedIndices.contains(idx)) {
+      sortedIndices.append(idx);
+    }
+  }
+  std::sort(sortedIndices.begin(), sortedIndices.end());
+
+  for (int tIdx : sortedIndices) {
+    const Track &t = m_tracks[tIdx];
+    ClipboardTrack ct;
+    ct.name = t.name;
+    ct.color = t.color;
+    ct.gain = t.gain;
+    ct.pan = t.pan;
+    ct.originalTrackIndex = tIdx;
+    ct.sources = t.sources;
+    ct.clips = t.clips;
+    m_clipboardTracks.append(ct);
+  }
+
+  lock.unlock();
+  emit hasClipboardChanged();
+  return !m_clipboardTracks.isEmpty();
+}
+
+bool TrackModel::copyClips(const QVariantList &clipsList) {
+  QMutexLocker lock(&m_bufMutex);
+  m_clipboardTracks.clear();
+  if (clipsList.isEmpty()) {
+    lock.unlock();
+    emit hasClipboardChanged();
+    return false;
+  }
+
+  QMap<int, QList<int>> clipsByTrack;
+  for (const QVariant &v : clipsList) {
+    QVariantMap m = v.toMap();
+    int t = m.contains("track") ? m.value("track").toInt() : m.value("sourceTrack").toInt();
+    int c = m.contains("clip") ? m.value("clip").toInt() : m.value("clipIndex").toInt();
+    if (isValidIndex(t)) {
+      if (!clipsByTrack[t].contains(c))
+        clipsByTrack[t].append(c);
+    }
+  }
+
+  for (auto it = clipsByTrack.begin(); it != clipsByTrack.end(); ++it) {
+    int tIdx = it.key();
+    const Track &t = m_tracks[tIdx];
+    const QList<int> &cIndices = it.value();
+
+    ClipboardTrack ct;
+    ct.name = t.name;
+    ct.color = t.color;
+    ct.gain = t.gain;
+    ct.pan = t.pan;
+    ct.originalTrackIndex = tIdx;
+
+    QHash<int, int> srcMap;
+    for (int ci : cIndices) {
+      if (ci < 0 || ci >= t.clips.size()) continue;
+      const Clip &clip = t.clips[ci];
+      if (clip.sourceIdx < 0 || clip.sourceIdx >= t.sources.size()) continue;
+
+      int newSrcIdx;
+      if (srcMap.contains(clip.sourceIdx)) {
+        newSrcIdx = srcMap[clip.sourceIdx];
+      } else {
+        ct.sources.append(t.sources[clip.sourceIdx]);
+        newSrcIdx = ct.sources.size() - 1;
+        srcMap[clip.sourceIdx] = newSrcIdx;
+      }
+
+      Clip copyClip = clip;
+      copyClip.sourceIdx = newSrcIdx;
+      ct.clips.append(copyClip);
+    }
+
+    std::sort(ct.clips.begin(), ct.clips.end(), [](const Clip &a, const Clip &b) {
+      return a.timelineStart < b.timelineStart;
+    });
+
+    if (!ct.clips.isEmpty() || !cIndices.isEmpty()) {
+      m_clipboardTracks.append(ct);
+    }
+  }
+
+  lock.unlock();
+  emit hasClipboardChanged();
+  return !m_clipboardTracks.isEmpty();
+}
+
+bool TrackModel::copyRegion(double startSec, double endSec, const QVariantList &trackIndices) {
+  QMutexLocker lock(&m_bufMutex);
+  m_clipboardTracks.clear();
+  if (endSec <= startSec) {
+    lock.unlock();
+    emit hasClipboardChanged();
+    return false;
+  }
+
+  QList<int> tracks;
+  if (trackIndices.isEmpty()) {
+    for (int i = 0; i < m_tracks.size(); ++i) tracks.append(i);
+  } else {
+    for (const QVariant &v : trackIndices) {
+      int t = v.toInt();
+      if (isValidIndex(t) && !tracks.contains(t)) tracks.append(t);
+    }
+  }
+  std::sort(tracks.begin(), tracks.end());
+
+  for (int tIdx : tracks) {
+    const Track &t = m_tracks[tIdx];
+    const double sr = t.sources.isEmpty() ? 48000.0 : double(t.sources.first().sampleRate);
+
+    ClipboardTrack ct;
+    ct.name = t.name;
+    ct.color = t.color;
+    ct.gain = t.gain;
+    ct.pan = t.pan;
+    ct.originalTrackIndex = tIdx;
+
+    QHash<int, int> srcMap;
+    for (int j = 0; j < t.clips.size(); ++j) {
+      const Clip &c = t.clips[j];
+      double cStart = double(c.timelineStart) / sr;
+      double cLen = double(c.length) / sr;
+      double cEnd = cStart + cLen;
+
+      if (cStart < endSec && cEnd > startSec) {
+        if (c.sourceIdx < 0 || c.sourceIdx >= t.sources.size()) continue;
+
+        int newSrcIdx;
+        if (srcMap.contains(c.sourceIdx)) {
+          newSrcIdx = srcMap[c.sourceIdx];
+        } else {
+          ct.sources.append(t.sources[c.sourceIdx]);
+          newSrcIdx = ct.sources.size() - 1;
+          srcMap[c.sourceIdx] = newSrcIdx;
+        }
+
+        double overlapStart = std::max(cStart, startSec);
+        double overlapEnd = std::min(cEnd, endSec);
+        double overlapLen = overlapEnd - overlapStart;
+        double startOffsetSec = overlapStart - cStart;
+
+        Clip slicedClip = c;
+        slicedClip.sourceIdx = newSrcIdx;
+        slicedClip.timelineStart = qint64(std::round(overlapStart * sr));
+        slicedClip.sourceOffset = c.sourceOffset + qint64(std::round(startOffsetSec * sr));
+        slicedClip.length = qint64(std::round(overlapLen * sr));
+        if (startOffsetSec > 0.0) slicedClip.fadeInLen = 0;
+        if (overlapEnd < cEnd) slicedClip.fadeOutLen = 0;
+
+        ct.clips.append(slicedClip);
+      }
+    }
+
+    if (!ct.clips.isEmpty()) {
+      m_clipboardTracks.append(ct);
+    }
+  }
+
+  lock.unlock();
+  emit hasClipboardChanged();
+  return !m_clipboardTracks.isEmpty();
+}
+
+bool TrackModel::copyTrackRegions(const QVariantMap &regions) {
+  QMutexLocker lock(&m_bufMutex);
+  m_clipboardTracks.clear();
+  if (regions.isEmpty()) {
+    lock.unlock();
+    emit hasClipboardChanged();
+    return false;
+  }
+
+  QList<int> sortedTracks;
+  for (auto it = regions.constBegin(); it != regions.constEnd(); ++it) {
+    bool ok = false;
+    int t = it.key().toInt(&ok);
+    if (ok && isValidIndex(t) && !sortedTracks.contains(t)) {
+      sortedTracks.append(t);
+    }
+  }
+  std::sort(sortedTracks.begin(), sortedTracks.end());
+
+  for (int tIdx : sortedTracks) {
+    const Track &t = m_tracks[tIdx];
+    const double sr = t.sources.isEmpty() ? 48000.0 : double(t.sources.first().sampleRate);
+
+    QVariantMap rMap = regions.value(QString::number(tIdx)).toMap();
+    double startSec = rMap.value("start", 0.0).toDouble();
+    double endSec = rMap.value("end", 0.0).toDouble();
+    if (endSec <= startSec) continue;
+
+    ClipboardTrack ct;
+    ct.name = t.name;
+    ct.color = t.color;
+    ct.gain = t.gain;
+    ct.pan = t.pan;
+    ct.originalTrackIndex = tIdx;
+
+    QHash<int, int> srcMap;
+    for (int j = 0; j < t.clips.size(); ++j) {
+      const Clip &c = t.clips[j];
+      double cStart = double(c.timelineStart) / sr;
+      double cLen = double(c.length) / sr;
+      double cEnd = cStart + cLen;
+
+      if (cStart < endSec && cEnd > startSec) {
+        if (c.sourceIdx < 0 || c.sourceIdx >= t.sources.size()) continue;
+
+        int newSrcIdx;
+        if (srcMap.contains(c.sourceIdx)) {
+          newSrcIdx = srcMap[c.sourceIdx];
+        } else {
+          ct.sources.append(t.sources[c.sourceIdx]);
+          newSrcIdx = ct.sources.size() - 1;
+          srcMap[c.sourceIdx] = newSrcIdx;
+        }
+
+        double overlapStart = std::max(cStart, startSec);
+        double overlapEnd = std::min(cEnd, endSec);
+        double overlapLen = overlapEnd - overlapStart;
+        double startOffsetSec = overlapStart - cStart;
+
+        Clip slicedClip = c;
+        slicedClip.sourceIdx = newSrcIdx;
+        slicedClip.timelineStart = qint64(std::round(overlapStart * sr));
+        slicedClip.sourceOffset = c.sourceOffset + qint64(std::round(startOffsetSec * sr));
+        slicedClip.length = qint64(std::round(overlapLen * sr));
+        if (startOffsetSec > 0.0) slicedClip.fadeInLen = 0;
+        if (overlapEnd < cEnd) slicedClip.fadeOutLen = 0;
+
+        ct.clips.append(slicedClip);
+      }
+    }
+
+    if (!ct.clips.isEmpty()) {
+      m_clipboardTracks.append(ct);
+    }
+  }
+
+  lock.unlock();
+  emit hasClipboardChanged();
+  return !m_clipboardTracks.isEmpty();
+}
+
+void TrackModel::clearClipboard() {
+  QMutexLocker lock(&m_bufMutex);
+  m_clipboardTracks.clear();
+  lock.unlock();
+  emit hasClipboardChanged();
+}
+
+int TrackModel::pasteClipboardInternal(int targetTrackIndex, double timelineStartSec, bool ripple) {
+  QMutexLocker lock(&m_bufMutex);
+  if (m_clipboardTracks.isEmpty())
+    return 0;
+
+  double earliestSec = std::numeric_limits<double>::max();
+  double latestSec = 0.0;
+  for (const auto &ct : m_clipboardTracks) {
+    for (const auto &c : ct.clips) {
+      double sr = 48000.0;
+      if (c.sourceIdx >= 0 && c.sourceIdx < ct.sources.size()) {
+        sr = double(ct.sources[c.sourceIdx].sampleRate);
+      }
+      double cStart = double(c.timelineStart) / sr;
+      double cEnd = cStart + double(c.length) / sr;
+      if (cStart < earliestSec) earliestSec = cStart;
+      if (cEnd > latestSec) latestSec = cEnd;
+    }
+  }
+  if (earliestSec == std::numeric_limits<double>::max()) {
+    earliestSec = 0.0;
+    latestSec = 0.0;
+  }
+
+  int minOrigTrack = std::numeric_limits<int>::max();
+  for (const auto &ct : m_clipboardTracks) {
+    if (ct.originalTrackIndex < minOrigTrack)
+      minOrigTrack = ct.originalTrackIndex;
+  }
+
+  int totalClipsPasted = 0;
+  QVector<int> modifiedTracks;
+
+  for (const auto &ct : m_clipboardTracks) {
+    int dstTrackIndex = targetTrackIndex + (ct.originalTrackIndex - minOrigTrack);
+    if (!isValidIndex(dstTrackIndex))
+      continue;
+
+    Track &dst = m_tracks[dstTrackIndex];
+    const int dstSR = dst.sources.isEmpty() ? 48000 : dst.sources.first().sampleRate;
+    const qint64 pasteBaseFrame = qint64(std::max(0.0, timelineStartSec) * dstSR);
+    const qint64 totalLenFrames = qint64((latestSec - earliestSec) * dstSR);
+
+    if (ripple && totalLenFrames > 0 && !dst.clips.isEmpty()) {
+      splitClipsAtLocked(dstTrackIndex, pasteBaseFrame);
+      for (auto &clip : dst.clips) {
+        if (clip.timelineStart >= pasteBaseFrame) {
+          clip.timelineStart += totalLenFrames;
+        }
+      }
+    }
+
+    QHash<int, int> ctToDstSourceIdx;
+    auto findExistingSourceInDst = [&dst](const std::shared_ptr<QVector<float>> &samplesPtr,
+                                          const std::shared_ptr<MmapAudioBuffer> &mmapPtr) -> int {
+      for (int i = 0; i < dst.sources.size(); ++i) {
+        if (samplesPtr && dst.sources[i].samples == samplesPtr) return i;
+        if (mmapPtr && dst.sources[i].mmapBuffer == mmapPtr) return i;
+      }
+      return -1;
+    };
+
+    for (const Clip &srcClip : ct.clips) {
+      if (srcClip.sourceIdx < 0 || srcClip.sourceIdx >= ct.sources.size())
+        continue;
+
+      int newSourceIdx;
+      if (ctToDstSourceIdx.contains(srcClip.sourceIdx)) {
+        newSourceIdx = ctToDstSourceIdx[srcClip.sourceIdx];
+      } else {
+        const AudioSource &srcAudio = ct.sources[srcClip.sourceIdx];
+        int existing = findExistingSourceInDst(srcAudio.samples, srcAudio.mmapBuffer);
+        if (existing >= 0) {
+          newSourceIdx = existing;
+        } else {
+          AudioSource dstAudio;
+          dstAudio.samples = srcAudio.samples;
+          dstAudio.mmapBuffer = srcAudio.mmapBuffer;
+          dstAudio.sampleRate = srcAudio.sampleRate;
+          dstAudio.channels = srcAudio.channels;
+          dstAudio.peaks = srcAudio.peaks;
+          dstAudio.processedSamples = srcAudio.processedSamples;
+          dstAudio.mipmap = srcAudio.mipmap;
+          dstAudio.isDirty = true;
+          dst.sources.append(std::move(dstAudio));
+          newSourceIdx = dst.sources.size() - 1;
+        }
+        ctToDstSourceIdx[srcClip.sourceIdx] = newSourceIdx;
+      }
+
+      double srcSR = double(ct.sources[srcClip.sourceIdx].sampleRate);
+      if (srcSR <= 0.0) srcSR = 48000.0;
+      double clipStartSec = double(srcClip.timelineStart) / srcSR;
+      double relOffsetSec = clipStartSec - earliestSec;
+      qint64 dstTimelineStart = pasteBaseFrame + qint64(std::round(relOffsetSec * dstSR));
+
+      Clip dstClip = srcClip;
+      dstClip.sourceIdx = newSourceIdx;
+      dstClip.timelineStart = std::max<qint64>(0, dstTimelineStart);
+      if (int(srcSR) != dstSR) {
+        dstClip.sourceOffset = qint64(std::round(double(srcClip.sourceOffset) * dstSR / srcSR));
+        dstClip.length = qint64(std::round(double(srcClip.length) * dstSR / srcSR));
+        dstClip.fadeInLen = qint64(std::round(double(srcClip.fadeInLen) * dstSR / srcSR));
+        dstClip.fadeOutLen = qint64(std::round(double(srcClip.fadeOutLen) * dstSR / srcSR));
+      }
+
+      dst.clips.append(dstClip);
+      totalClipsPasted++;
+    }
+
+    std::sort(dst.clips.begin(), dst.clips.end(), [](const Clip &a, const Clip &b) {
+      return a.timelineStart < b.timelineStart;
+    });
+
+    for (int i = 0; i < dst.clips.size(); ++i) {
+      Clip &clip = dst.clips[i];
+      if (i > 0) {
+        const Clip &prev = dst.clips[i - 1];
+        const qint64 prevEnd = prev.timelineStart + prev.length;
+        if (prevEnd > clip.timelineStart) {
+          const qint64 overlap = prevEnd - clip.timelineStart;
+          clip.fadeInLen = overlap;
+          if (clip.fadeInLen + clip.fadeOutLen > clip.length)
+            clip.fadeInLen = clip.length - clip.fadeOutLen;
+        }
+      }
+      if (i < dst.clips.size() - 1) {
+        const Clip &next = dst.clips[i + 1];
+        const qint64 clipEnd = clip.timelineStart + clip.length;
+        if (clipEnd > next.timelineStart) {
+          const qint64 overlap = clipEnd - next.timelineStart;
+          clip.fadeOutLen = overlap;
+          if (clip.fadeInLen + clip.fadeOutLen > clip.length)
+            clip.fadeOutLen = clip.length - clip.fadeInLen;
+        }
+      }
+    }
+
+    invalidateFlatCache(dst);
+    modifiedTracks.append(dstTrackIndex);
+  }
+
+  lock.unlock();
+
+  for (int tIdx : modifiedTracks) {
+    emit clipsChanged(tIdx);
+    emitRowChanged(tIdx, {DurationRole, HasAudioRole});
+    emit trackPeaksUpdated(tIdx);
+  }
+
+  return totalClipsPasted;
 }
 
 QVector<float> TrackModel::trackSamples(int index) const {
