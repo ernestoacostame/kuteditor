@@ -362,6 +362,8 @@ endif()
 
 if(HAVE_JACK)
     target_include_directories(kuteditor PRIVATE ${JACK_INCLUDE_DIRS})
+    # Fedora/Bazzite: libjack (pipewire-jack) vive en /usr/lib64/pipewire-0.3/jack, fuera del path por defecto
+    target_link_directories(kuteditor PRIVATE ${JACK_LIBRARY_DIRS})
     target_link_libraries(kuteditor PRIVATE ${JACK_LIBRARIES})
     target_compile_options(kuteditor PRIVATE ${JACK_CFLAGS_OTHER})
 endif()
