@@ -2153,10 +2153,13 @@ void TrackModel::readMixSegment(int index, qint64 startFrame, int nFrames,
   }
 
   const Track &t = m_tracks[index];
-  const int ch = t.sources.isEmpty() ? 2 : t.sources.first().channels;
+  // La salida es SIEMPRE estéreo entrelazado (L,R por frame): es lo que espera AudioEngine. Una fuente
+  // mono se duplica en L y R; con más de 2 canales se usan los dos primeros. (Antes se escribían tantos
+  // canales como tuviera la fuente: una pista mono sonaba al doble de velocidad, «voz de pito».)
+  constexpr int OUT = 2;
 
   // Inicializar a silencio
-  std::memset(outBuf, 0, sizeof(float) * nFrames * ch);
+  std::memset(outBuf, 0, sizeof(float) * nFrames * OUT);
 
   if (t.clips.isEmpty() || t.sources.isEmpty()) return;
 
@@ -2174,7 +2177,8 @@ void TrackModel::readMixSegment(int index, qint64 startFrame, int nFrames,
     if (c.timelineStart >= endFrame) break; // Los clips están ordenados
 
     const auto &src = t.sources[c.sourceIdx];
-    if (src.channels != ch) continue;
+    const int ch = src.channels;                 // canales de ESTA fuente
+    if (ch < 1) continue;
     const qint64 srcTotalFrames = src.samplesSize() / ch;
 
     // Calcular el rango de solapamiento en coordenadas de línea temporal
@@ -2190,7 +2194,7 @@ void TrackModel::readMixSegment(int index, qint64 startFrame, int nFrames,
 
     // Punteros al origen y destino
     const float *srcBuf = src.samplesConstData() + srcOffset * ch;
-    float *dst = outBuf + (ovStart - startFrame) * ch;
+    float *dst = outBuf + (ovStart - startFrame) * OUT;
 
     // Determinar wet/dry del denoiser si aplica
     const float *wetBuf = nullptr;
@@ -2236,11 +2240,12 @@ void TrackModel::readMixSegment(int index, qint64 startFrame, int nFrames,
             g = float(v0 + frac * (v1 - v0));
           }
         }
-        for (int k = 0; k < ch; ++k) {
-          float sample = srcBuf[i * ch + k];
+        for (int k = 0; k < OUT; ++k) {
+          const int sk = ch == 1 ? 0 : k;      // mono → L=R
+          float sample = srcBuf[i * ch + sk];
           if (wetBuf)
-            sample = sample * (1.0f - denoiseMix) + wetBuf[i * ch + k] * denoiseMix;
-          dst[i * ch + k] += sample * g;
+            sample = sample * (1.0f - denoiseMix) + wetBuf[i * ch + sk] * denoiseMix;
+          dst[i * OUT + k] += sample * g;
         }
       }
     } else {
@@ -2263,11 +2268,12 @@ void TrackModel::readMixSegment(int index, qint64 startFrame, int nFrames,
           g = float(fout - fadeFrame) / float(fout) * cg;
         }
 
-        for (int k = 0; k < ch; ++k) {
-          float sample = srcBuf[i * ch + k];
+        for (int k = 0; k < OUT; ++k) {
+          const int sk = ch == 1 ? 0 : k;      // mono → L=R
+          float sample = srcBuf[i * ch + sk];
           if (wetBuf)
-            sample = sample * (1.0f - denoiseMix) + wetBuf[i * ch + k] * denoiseMix;
-          dst[i * ch + k] += sample * g;
+            sample = sample * (1.0f - denoiseMix) + wetBuf[i * ch + sk] * denoiseMix;
+          dst[i * OUT + k] += sample * g;
         }
       }
     }
