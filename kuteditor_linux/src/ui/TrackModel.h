@@ -484,6 +484,10 @@ signals:
   void trackDeviceChanged(int index, const QString &deviceId);
   void trackArmedChanged(int index, bool armed);
   void trackPeaksUpdated(int index);
+  /// Importación de un archivo de audio (en segundo plano): empieza / termina. Si ok=false,
+  /// `message` explica por qué falló (antes fallaba en silencio y la pista quedaba vacía).
+  void importStarted(const QString &fileName);
+  void importFinished(const QString &fileName, bool ok, const QString &message);
   void trackLevelsChanged();
   /// Emitida cuando la estructura de clips de una pista cambia (split,
   /// delete, move, ...). La UI la usa para repopular el Repeater.

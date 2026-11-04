@@ -1,4 +1,5 @@
 #pragma once
+#include <memory>
 
 #include <QObject>
 #include <QFile>
@@ -56,6 +57,13 @@ public:
     bool loadFromVector(const QVector<float> &samples, int channels, int sampleRate);
 
     /**
+     * Calcula el mipmap sobre datos que ya viven en otro sitio (p. ej. un mmap) SIN copiarlos.
+     * `owner` mantiene vivo el buffer mientras exista el mipmap.
+     */
+    bool loadExternal(const float *data, qint64 floatCount, int channels, int sampleRate,
+                      std::shared_ptr<void> owner);
+
+    /**
      * Append samples to the in-memory vector and incrementally update mipmaps.
      * Used during live recording to keep the mipmap current without full rebuild.
      */
@@ -110,6 +118,8 @@ private:
     qint64 m_dataOffset = 0; // Skip WAV headers
 
     QVector<float> m_samples; // RAM fallback
+    const float *m_extData = nullptr;      // datos externos (mmap) sin copia
+    std::shared_ptr<void> m_extOwner;
 
     int m_channels = 1;
     int m_sampleRate = 48000;

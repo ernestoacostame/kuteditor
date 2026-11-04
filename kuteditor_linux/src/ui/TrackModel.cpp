@@ -18,6 +18,7 @@
 #include <QProcess>
 #include <QStandardPaths>
 #include <QTemporaryFile>
+#include "audio/KutScratch.h"
 #include <QUrl>
 #include <QVariantMap>
 #include <algorithm>
@@ -2664,14 +2665,11 @@ int TrackModel::addSourceToTrack(int trackIndex, QVector<float> &&samples,
     }
 
     s.mipmap = std::make_shared<AudioMipmap>();
-    // Cargar mipmap desde datos (mmap o heap).
+    // Cargar mipmap desde datos (mmap o heap). Con mmap NO se copia a RAM: el mipmap lee del buffer
+    // mapeado y lo mantiene vivo (antes cada pista larga duplicaba su tamaño entero en memoria).
     if (s.isMmapped()) {
-      // Construir QVector temporal con vista de los datos para el mipmap
-      // (no copia: loadFromRawData sería ideal, pero usamos constData+size)
-      QVector<float> tmpView(s.mmapBuffer->size());
-      std::memcpy(tmpView.data(), s.mmapBuffer->constData(),
-                  s.mmapBuffer->size() * sizeof(float));
-      s.mipmap->loadFromVector(tmpView, channels, sampleRate);
+      s.mipmap->loadExternal(s.mmapBuffer->constData(), qint64(s.mmapBuffer->size()),
+                             channels, sampleRate, s.mmapBuffer);
     } else {
       s.mipmap->loadFromVector(s.samplesVec(), channels, sampleRate);
     }
@@ -3969,8 +3967,22 @@ bool TrackModel::importAudioFile(int trackIndex, const QString &filePath,
   }
 
   QPointer<TrackModel> weakThis(this);
+  const QString fileName = QFileInfo(resolvedPath).fileName();
+  emit importStarted(fileName);
 
-  (void) QtConcurrent::run([weakThis, trackIndex, resolvedPath, timelineStartSec]() {
+  (void) QtConcurrent::run([weakThis, trackIndex, resolvedPath, timelineStartSec, fileName]() {
+    // Un solo import pesado a la vez: decodificar varias horas de audio en paralelo agota la memoria.
+    static QMutex importMutex;
+    QMutexLocker importLock(&importMutex);
+
+    auto fail = [&](const QString &reason) {
+      qWarning() << "[Import] FALLO" << fileName << ":" << reason;
+      if (weakThis)
+        QMetaObject::invokeMethod(weakThis.data(), [weakThis, fileName, reason]() {
+          if (weakThis) emit weakThis->importFinished(fileName, false, reason);
+        }, Qt::QueuedConnection);
+    };
+
     QVector<float> samples;
     int sr = 48000, ch = 2;
     bool ok = false;
@@ -3982,29 +3994,22 @@ bool TrackModel::importAudioFile(int trackIndex, const QString &filePath,
     }
 
     // Fallback: si falla WAV nativo o no es WAV, usar ffmpeg para decodificar
-    // a un WAV temporal float32 estéreo 48kHz y leerlo.
+    // a un WAV temporal estéreo 48kHz (en la carpeta de trabajo del disco, NO en /tmp) y leerlo.
     if (!ok) {
       const QString ffmpegPath = findFfmpegExecutable();
       if (ffmpegPath.isEmpty()) {
-        qWarning() << "[Import] ffmpeg no encontrado en PATH; solo WAV soportado.";
+        fail(QObject::tr("No se pudo leer el archivo como WAV y ffmpeg no está instalado para convertirlo."));
         return;
       }
 
-      // 1. Crear el nombre del archivo sin bloquearlo
-      QString tmpPath;
-      {
-        QTemporaryFile tmp(QDir::tempPath() + "/import_XXXXXX.wav");
-        tmp.setAutoRemove(false);
-        if (!tmp.open()) {
-          qWarning() << "[Import] No se pudo crear archivo temporal en"
-                     << QDir::tempPath();
-          return;
-        }
-        tmpPath = tmp.fileName();
-        tmp.close();
+      const QString tmpPath = KutScratch::uniqueFile(QStringLiteral("import"), QStringLiteral("wav"));
+      const qint64 freeB = KutScratch::freeBytes();
+      if (freeB >= 0 && freeB < (3LL << 30)) {
+        fail(QObject::tr("Queda poco espacio libre en disco (%1 MB) para convertir el audio. Libera espacio e inténtalo de nuevo.")
+                 .arg(freeB >> 20));
+        return;
       }
 
-      // 2. Ejecución con argumentos separados (QStringList, no string único)
       QProcess ffmpeg;
       QStringList args;
       args << "-hide_banner" << "-y"
@@ -4015,20 +4020,20 @@ bool TrackModel::importAudioFile(int trackIndex, const QString &filePath,
 
       ffmpeg.start(ffmpegPath, args);
 
-      // 3. Captura de errores completa
       if (!ffmpeg.waitForStarted(5000)) {
-        qWarning() << "[Import] ffmpeg no arrancó:" << ffmpeg.errorString();
+        fail(QObject::tr("ffmpeg no arrancó: %1").arg(ffmpeg.errorString()));
         QFile::remove(tmpPath);
         return;
       }
-      if (!ffmpeg.waitForFinished(120000)) { // 2 min para archivos largos
-        qWarning() << "[Import] ffmpeg timeout";
+      if (!ffmpeg.waitForFinished(60 * 60 * 1000)) { // hasta 1 h para grabaciones muy largas
         ffmpeg.kill();
+        fail(QObject::tr("La conversión con ffmpeg tardó demasiado y se canceló."));
         QFile::remove(tmpPath);
         return;
       }
       if (ffmpeg.exitCode() != 0) {
-        qWarning() << "[Import] ffmpeg falló (exit" << ffmpeg.exitCode() << ")";
+        const QString err = QString::fromUtf8(ffmpeg.readAllStandardError()).trimmed().split('\n').last();
+        fail(QObject::tr("ffmpeg no pudo convertir el archivo (código %1). %2").arg(ffmpeg.exitCode()).arg(err));
         QFile::remove(tmpPath);
         return;
       }
@@ -4038,7 +4043,7 @@ bool TrackModel::importAudioFile(int trackIndex, const QString &filePath,
     }
 
     if (!ok || samples.isEmpty() || ch <= 0) {
-      qWarning() << "[Import] Falló la decodificación del archivo:" << resolvedPath;
+      fail(QObject::tr("No se pudo decodificar el archivo de audio."));
       return;
     }
 
@@ -4061,7 +4066,7 @@ bool TrackModel::importAudioFile(int trackIndex, const QString &filePath,
 
       const int err = src_simple(&data, SRC_SINC_MEDIUM_QUALITY, ch);
       if (err != 0) {
-        qWarning() << "[Import] Resample falló:" << src_strerror(err);
+        fail(QObject::tr("No se pudo convertir la frecuencia de muestreo: %1").arg(QString::fromUtf8(src_strerror(err))));
         return;
       }
       resampled.resize(data.output_frames_gen * ch);
@@ -4098,17 +4103,23 @@ bool TrackModel::importAudioFile(int trackIndex, const QString &filePath,
         if (!weakThis) return;
         if (!weakThis->isValidIndex(trackIndex)) {
           qWarning() << "[Import] La pista destino ya no es válida:" << trackIndex;
+          emit weakThis->importFinished(QFileInfo(resolvedPath).fileName(), false,
+                                        tr("La pista de destino ya no existe."));
           return;
         }
 
         const qint64 frames = samples.size() / ch;
         const int srcIdx = weakThis->addSourceToTrack(trackIndex, std::move(samples), sr, ch);
-        if (srcIdx < 0)
+        if (srcIdx < 0) {
+          emit weakThis->importFinished(QFileInfo(resolvedPath).fileName(), false,
+                                        tr("No se pudo añadir el audio a la pista."));
           return;
+        }
 
         const qint64 tlStart = qint64(std::max(0.0, timelineStartSec) * sr);
         weakThis->addClipRaw(trackIndex, srcIdx, tlStart, 0, frames);
 
+        emit weakThis->importFinished(QFileInfo(resolvedPath).fileName(), true, QString());
         qDebug() << "[Import] Importado de forma asíncrona:" << QFileInfo(resolvedPath).fileName()
                  << "(" << frames << "frames," << ch << "ch," << sr << "Hz ) en pista"
                  << trackIndex;
