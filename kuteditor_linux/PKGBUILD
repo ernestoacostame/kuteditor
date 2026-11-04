@@ -20,7 +20,7 @@ build() {
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_INSTALL_PREFIX=/usr \
         -DHAVE_WHISPER=OFF \
-        -DHAVE_KUTPOD=ON \
+        -DHAVE_KUTPOD=OFF \
         -G Ninja
     cmake --build build
 }
