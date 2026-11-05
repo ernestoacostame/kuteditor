@@ -1,4 +1,4 @@
-kuteditor (2.48-1) unstable; urgency=medium
+kuteditor (2.70-1) unstable; urgency=medium
 
   * Initial Debian package, built from the upstream git tree.
   * Fix the DeepFilterNet library lookup and the executable RPATH, which
