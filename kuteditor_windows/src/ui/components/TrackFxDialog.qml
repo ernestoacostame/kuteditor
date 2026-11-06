@@ -385,7 +385,7 @@ Window {
                     anchors.fill: parent
                     anchors.margins: 8
                     spacing: 8
-                    Label { text:"💡 Asigna pistas manualmente o usa Auto-detectar (voz=esta pista, música=siguiente)."; color:"#5d8fd4"; font.pixelSize:9; wrapMode:Text.WordWrap; width:parent.width - autoBtn.width - 16; anchors.verticalCenter:autoBtn.verticalCenter }
+                    Label { text: qsTr("💡 Asigna pistas manualmente o usa Auto-detectar (voz=esta pista, música=siguiente)."); color:"#5d8fd4"; font.pixelSize:9; wrapMode:Text.WordWrap; width:parent.width - autoBtn.width - 16; anchors.verticalCenter:autoBtn.verticalCenter }
                     Button {
                         id: autoBtn; text:"Auto"; width:50; height:22
                         onClicked: { if(!fx) return; fx.setControlTrack(fxDialog.trackIndex); fx.setTargetTrack((fxDialog.trackIndex+1)%Math.max(1,TrackModel.count)) }
@@ -399,7 +399,7 @@ Window {
             Row {
                 spacing:8; width:parent.width
                 Column { width:(parent.width-8)/2; spacing:3
-                    Label { text:"VOZ (Control)"; color:"#777"; font.pixelSize:8; font.bold:true; font.letterSpacing:0.5 }
+                    Label { text: qsTr("VOZ (Control)"); color:"#777"; font.pixelSize:8; font.bold:true; font.letterSpacing:0.5 }
                     ComboBox {
                         width:parent.width; height:26
                         model: { var a=["— Ninguna —"]; for(var i=0;i<TrackModel.count;i++){var d=TrackModel.getTrackData(i); a.push("P"+(i+1)+": "+(d.name||"Sin nombre"))} return a }
@@ -410,7 +410,7 @@ Window {
                     }
                 }
                 Column { width:(parent.width-8)/2; spacing:3
-                    Label { text:"MÚSICA (Objetivo)"; color:"#777"; font.pixelSize:8; font.bold:true; font.letterSpacing:0.5 }
+                    Label { text: qsTr("MÚSICA (Objetivo)"); color:"#777"; font.pixelSize:8; font.bold:true; font.letterSpacing:0.5 }
                     ComboBox {
                         width:parent.width; height:26
                         model: { var a=["— Ninguna —"]; for(var i=0;i<TrackModel.count;i++){var d=TrackModel.getTrackData(i); a.push("P"+(i+1)+": "+(d.name||"Sin nombre"))} return a }
@@ -496,7 +496,7 @@ Window {
                     Label { anchors.centerIn:parent; text:fx && fx.enabled ? "ON":"OFF"; color:fx && fx.enabled ? "#ccc":"#666"; font.bold:true; font.pixelSize:10; font.letterSpacing:1 }
                     MouseArea { anchors.fill:parent; cursorShape:Qt.PointingHandCursor; onClicked:{ if(fx) fx.setEnabled(!fx.enabled) } }
                 }
-                Label { text:"Truncar silencio"; color:"#e8eaed"; font.bold:true; font.pixelSize:13; anchors.verticalCenter:parent.children[0].verticalCenter }
+                Label { text: qsTr("Truncar silencio"); color:"#e8eaed"; font.bold:true; font.pixelSize:13; anchors.verticalCenter:parent.children[0].verticalCenter }
             }
             Rectangle { width:parent.width; height:1; color:"#2a2d32" }
 
@@ -507,9 +507,9 @@ Window {
                     anchors.fill: parent
                     anchors.margins: 8
                     spacing: 8
-                    Label { text:"⚠  Elimina silencios del clip. Configura y pulsa Procesar."; color:"#d4a017"; font.pixelSize:10; wrapMode:Text.WordWrap; width:parent.width - procBtn.width - 16; anchors.verticalCenter:procBtn.verticalCenter }
+                    Label { text: qsTr("⚠  Elimina silencios del clip. Configura y pulsa Procesar."); color:"#d4a017"; font.pixelSize:10; wrapMode:Text.WordWrap; width:parent.width - procBtn.width - 16; anchors.verticalCenter:procBtn.verticalCenter }
                     Button {
-                        id:procBtn; text:"Procesar"; width:80; height:24
+                        id:procBtn; text: qsTr("Procesar"); width:80; height:24
                         onClicked: { if(fx && typeof fx.apply==="function") fx.apply() }
                         background: Rectangle { color:parent.pressed?"#7a5a00":"#5a4200"; radius:3; border.color:"#d4a017"; border.width:1 }
                         contentItem: Label { anchors.centerIn: parent; text:parent.text; color:"#f0c040"; font.pixelSize:10; font.bold:true; horizontalAlignment:Text.AlignHCenter; verticalAlignment:Text.AlignVCenter }
@@ -764,7 +764,7 @@ Window {
             Row {
                 spacing: 10
                 Label {
-                    text: "Compresor"
+                    text: qsTr("Compresor")
                     color: "#fff"; font.bold: true; font.pixelSize: 14
                     anchors.verticalCenter: parent.children[1].verticalCenter
                 }
@@ -1120,7 +1120,7 @@ Window {
                     }
                     
                     Button {
-                        text: "Descargar"
+                        text: qsTr("Descargar")
                         visible: fx && !fx.isReady && fx.downloadProgress === 0
                         onClicked: { if(fx) fx.retryDownload() }
                         background: Rectangle { color: parent.pressed ? "#7a5a00" : "#5a4200"; radius: 3; border.color: "#d4a017"; border.width: 1 }

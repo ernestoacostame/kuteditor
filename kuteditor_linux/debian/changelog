@@ -1,3 +1,9 @@
+kuteditor (2.71-1) unstable; urgency=medium
+
+  * Soporte para selección de idioma (Español / Inglés).
+
+ -- KutStudio <soporte@kutstudio.com>  Thu, 05 Nov 2026 19:48:00 -0600
+
 kuteditor (2.70-1) unstable; urgency=medium
 
   * Initial Debian package, built from the upstream git tree.

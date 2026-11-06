@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
-project(kuteditor VERSION 2.70 LANGUAGES C CXX)
-set(CPACK_PACKAGE_VERSION "2.70")
+project(kuteditor VERSION 2.71 LANGUAGES C CXX)
+set(CPACK_PACKAGE_VERSION "2.71")
 
 set(CMAKE_OSX_DEPLOYMENT_TARGET "15.0" CACHE STRING "Minimum macOS version" FORCE)
 
@@ -190,6 +190,7 @@ set(SOURCES
     src/audio/GpuMipmapCompute.cpp
     src/audio/MmapAudioBuffer.cpp
     src/ui/TrackModel.cpp
+    src/ui/LanguageManager.cpp
     src/ui/WaveformItem.cpp
     src/audio/fx/RNNoiseEffect.cpp
     src/ui/UndoManager.cpp
@@ -230,6 +231,7 @@ set(HEADERS
     src/audio/fx/TrimGainEffect.h
     src/audio/TrackFxChain.h
     src/ui/TrackModel.h
+    src/ui/LanguageManager.h
     src/ui/ChapterModel.h
     src/ui/UndoManager.h
     src/ui/WaveformItem.h
@@ -341,6 +343,13 @@ qt_add_resources(kuteditor "qml_files"
         src/ui/components/PublishWindow.qml
         src/ui/components/ToolTip.qml
         src/ui/fonts/MaterialSymbolsOutlined-ExtraLight.ttf
+)
+
+qt_add_resources(kuteditor "translations"
+    PREFIX "/"
+    FILES
+        i18n/kuteditor_en.qm
+        i18n/kuteditor_es.qm
 )
 
 # Icono de la aplicación. Se añade solo si el archivo existe en disco,

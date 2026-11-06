@@ -1815,6 +1815,56 @@ ApplicationWindow {
                     Layout.leftMargin: 20; Layout.rightMargin: 20
                     spacing: 10
 
+                    // ── IDIOMA / LANGUAGE ───────────────────────────────
+                    Label {
+                        text: qsTr("IDIOMA / LANGUAGE")
+                        color: root.accent
+                        font.pixelSize: 11; font.bold: true
+                    }
+
+                    Frame {
+                        Layout.fillWidth: true
+                        padding: 12
+                        background: Rectangle { color: "#2a2d32"; radius: 6 }
+
+                        ColumnLayout {
+                            id: prefLangCol
+                            width: parent.width
+                            spacing: 8
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Label {
+                                    text: qsTr("Idioma de la aplicación:")
+                                    color: root.textPri
+                                    Layout.preferredWidth: 160
+                                }
+                                ComboBox {
+                                    id: prefLangCombo
+                                    Layout.fillWidth: true
+                                    model: [
+                                        { text: qsTr("Automático (según el sistema)"), value: "auto" },
+                                        { text: "Español", value: "es" },
+                                        { text: "English", value: "en" }
+                                    ]
+                                    textRole: "text"
+                                    valueRole: "value"
+                                    currentIndex: {
+                                        var code = LanguageManager.currentLanguage;
+                                        if (code === "es") return 1;
+                                        if (code === "en") return 2;
+                                        return 0;
+                                    }
+                                    onActivated: {
+                                        LanguageManager.setLanguage(currentValue);
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Item { Layout.preferredHeight: 2 }
+
                     // ── NORMALIZACIÓN DINÁMICA ───────────────────────────
                     Label {
                         text: qsTr("NORMALIZACIÓN DINÁMICA")

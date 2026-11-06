@@ -33,7 +33,7 @@ Column {
             anchors.fill: parent
             anchors.margins: 8
             spacing: 8
-            Label { text:"💡 Asigna pistas manualmente o usa Auto-detectar."; color:"#5d8fd4"; font.pixelSize:9; wrapMode:Text.WordWrap; width:parent.width - autoBtn.width - 16; anchors.verticalCenter:autoBtn.verticalCenter }
+            Label { text: qsTr("💡 Asigna pistas manualmente o usa Auto-detectar."); color:"#5d8fd4"; font.pixelSize:9; wrapMode:Text.WordWrap; width:parent.width - autoBtn.width - 16; anchors.verticalCenter:autoBtn.verticalCenter }
             Button {
                 id: autoBtn; text:"Auto"; width:50; height:22
                 onClicked: {
@@ -51,7 +51,7 @@ Column {
     Row {
         spacing:8; width:parent.width
         Column { width:(parent.width-8)/2; spacing:3
-            Label { text:"VOZ (Control)"; color:"#777"; font.pixelSize:8; font.bold:true; font.letterSpacing:0.5 }
+            Label { text: qsTr("VOZ (Control)"); color:"#777"; font.pixelSize:8; font.bold:true; font.letterSpacing:0.5 }
             ComboBox {
                 width:parent.width; height:26
                 // TrackModel is globally available
@@ -63,7 +63,7 @@ Column {
             }
         }
         Column { width:(parent.width-8)/2; spacing:3
-            Label { text:"MÚSICA (Objetivo)"; color:"#777"; font.pixelSize:8; font.bold:true; font.letterSpacing:0.5 }
+            Label { text: qsTr("MÚSICA (Objetivo)"); color:"#777"; font.pixelSize:8; font.bold:true; font.letterSpacing:0.5 }
             ComboBox {
                 width:parent.width; height:26
                 model: { var a=["— Ninguna —"]; for(var i=0;i<TrackModel.count;i++){var d=TrackModel.getTrackData(i); a.push("P"+(i+1)+": "+(d.name||"Sin nombre"))} return a }

@@ -21,6 +21,7 @@
 #include "io/ExportManager.h"
 #include "io/ProjectIO.h"
 #include "ui/ChapterModel.h"
+#include "ui/LanguageManager.h"
 #include "io/FileHelper.h"
 #include "transcription/TranscriptionManager.h"
 #include "net/KutPodClient.h"
@@ -176,6 +177,9 @@ int main(int argc, char *argv[])
     QQmlApplicationEngine engine;
     qDebug() << "[main] QQmlApplicationEngine creada.";
 
+    LanguageManager::instance()->init(&engine);
+
+    engine.rootContext()->setContextProperty("LanguageManager", LanguageManager::instance());
     engine.rootContext()->setContextProperty("AudioEngine", audioEngine);
     engine.rootContext()->setContextProperty("TrackModel", trackModel);
     engine.rootContext()->setContextProperty("PipeWireManager", jackManager);

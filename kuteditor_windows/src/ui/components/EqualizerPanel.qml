@@ -15,7 +15,7 @@ Column {
         spacing: 10
         visible: eqPanel.showHeader
         Label {
-            text: "Ecualizador"
+            text: qsTr("Ecualizador")
             color: "#fff"; font.bold: true; font.pixelSize: 14
             anchors.verticalCenter: parent.children[1].verticalCenter
         }
