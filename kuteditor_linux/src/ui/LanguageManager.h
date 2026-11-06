@@ -37,3 +37,4 @@ private:
 };
 
 #endif // LANGUAGEMANAGER_H
+

@@ -69,3 +69,4 @@ void LanguageManager::applyLanguage() {
         m_engine->retranslate();
     }
 }
+
