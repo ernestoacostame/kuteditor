@@ -11,7 +11,7 @@ Info.plist
 3rdparty/ffmpeg/ffmpeg
 
 # Distribution
-dist/*.dmg
+dist/
 
 # Sparkle private keys & credentials
 sparkle_private_key*
