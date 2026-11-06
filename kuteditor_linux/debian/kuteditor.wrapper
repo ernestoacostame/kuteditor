@@ -1,0 +1,7 @@
+#!/bin/sh
+# KutEditor talks to audio through the JACK API, and on Debian PipeWire's
+# implementation of that API is not in the loader's default path: it lives in
+# a private directory and is reached through pw-jack. Launching the real
+# binary through it keeps the program on PipeWire, with no JACK server and no
+# jackd2 client library involved.
+exec pw-jack /usr/lib/kuteditor/kuteditor "$@"

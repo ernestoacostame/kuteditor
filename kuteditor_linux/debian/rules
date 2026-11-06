@@ -1,5 +1,11 @@
 #!/usr/bin/make -f
 
+# Provides DEB_HOST_MULTIARCH, used to reach PipeWire's private JACK directory
+# without hardcoding an architecture.
+include /usr/share/dpkg/architecture.mk
+
+PIPEWIRE_JACK_DIR = /usr/lib/$(DEB_HOST_MULTIARCH)/pipewire-0.3/jack
+
 %:
 	dh $@ --buildsystem=cmake
 
@@ -10,12 +16,25 @@ override_dh_auto_configure:
 		-DHAVE_KUTPOD=ON \
 		-DHAVE_DEEPFILTERNET=ON
 
-# libdeepfilter.so.0.5 is a prebuilt private library with no shlibs data of
-# its own. Point dh_shlibdeps at the directory it is installed into so the
-# executable resolves against it instead of failing.
+# The real executable moves into the private directory and /usr/bin/kuteditor
+# becomes the pw-jack wrapper, so both the desktop entry and a plain terminal
+# launch go through PipeWire.
+override_dh_auto_install:
+	dh_auto_install
+	install -d debian/kuteditor/usr/lib/kuteditor
+	mv debian/kuteditor/usr/bin/kuteditor \
+		debian/kuteditor/usr/lib/kuteditor/kuteditor
+	install -m 755 debian/kuteditor.wrapper debian/kuteditor/usr/bin/kuteditor
+
+# jackd2's client library is excluded outright. The binary needs libjack.so.0,
+# but it is launched through pw-jack, which points the loader at PipeWire's
+# own implementation in $(PIPEWIRE_JACK_DIR); letting dpkg-shlibdeps record
+# what it finds in the default path would pull jackd2 in for nothing. The -l
+# directory holds the prebuilt libdeepfilter, which carries no shlibs data.
 override_dh_shlibdeps:
-	dh_shlibdeps -l$(CURDIR)/debian/kuteditor/usr/lib/kuteditor \
-		-- --ignore-missing-info
+	dh_shlibdeps \
+		-l$(CURDIR)/debian/kuteditor/usr/lib/kuteditor \
+		-- --ignore-missing-info -xlibjack-jackd2-0
 
 # The bundled library is not built from source here, so it carries no
 # debug symbols to separate out.
