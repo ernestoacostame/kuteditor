@@ -390,78 +390,166 @@ Dialog {
 
                     Rectangle { Layout.fillWidth: true; height: 1; color: palette.mid }
 
-                    // Portada personalizada del episodio (opcional)
-                    Label {
-                        text: qsTr("Portada del episodio (opcional)")
-                        color: palette.text
-                        font.bold: true
-                    }
-                    Label {
-                        text: qsTr("Asigna una portada exclusiva para este episodio. Si no seleccionas ninguna, se usará la portada por defecto del podcast o las portadas de los capítulos.")
-                        color: palette.placeholderText
-                        font.pixelSize: 11
-                        wrapMode: Text.WordWrap
-                        Layout.fillWidth: true
-                    }
                     RowLayout {
                         Layout.fillWidth: true
-                        spacing: 12
+                        spacing: 16
+                        Layout.alignment: Qt.AlignTop
 
-                        Rectangle {
-                            id: customCoverBox
-                            implicitWidth: 64
-                            implicitHeight: 64
-                            color: "#1f2226"
-                            radius: 6
-                            border.color: pubDlg.customEpisodeCoverPath !== "" ? palette.highlight : palette.mid
-                            clip: true
-
-                            Image {
-                                anchors.fill: parent
-                                anchors.margins: 2
-                                source: pubDlg.customEpisodeCoverPath !== "" ? ("file://" + pubDlg.customEpisodeCoverPath) : ""
-                                visible: pubDlg.customEpisodeCoverPath !== ""
-                                fillMode: Image.PreserveAspectCrop
-                                asynchronous: true
-                                cache: false
-                            }
-
-                            Label {
-                                anchors.centerIn: parent
-                                visible: pubDlg.customEpisodeCoverPath === ""
-                                text: qsTr("Por defecto\ndel podcast")
-                                color: palette.placeholderText
-                                font.pixelSize: 9
-                                horizontalAlignment: Text.AlignHCenter
-                            }
-                        }
-
+                        // Columna izquierda: Portada del episodio (opcional)
                         ColumnLayout {
-                            spacing: 6
-                            RowLayout {
-                                spacing: 8
-                                Button {
-                                    text: pubDlg.customEpisodeCoverPath === ""
-                                        ? qsTr("Seleccionar portada…")
-                                        : qsTr("Cambiar portada…")
-                                    onClicked: customCoverPicker.open()
-                                }
-                                Button {
-                                    text: qsTr("Quitar")
-                                    visible: pubDlg.customEpisodeCoverPath !== ""
-                                    onClicked: pubDlg.customEpisodeCoverPath = ""
-                                }
-                            }
+                            Layout.fillWidth: true
+                            Layout.preferredWidth: 1
+                            Layout.alignment: Qt.AlignTop
+                            spacing: 8
+
                             Label {
-                                visible: pubDlg.customEpisodeCoverPath !== ""
-                                text: FileHelper.fileName(pubDlg.customEpisodeCoverPath)
+                                text: qsTr("Portada del episodio (opcional)")
                                 color: palette.text
-                                font.pixelSize: 11
-                                elide: Text.ElideMiddle
-                                Layout.maximumWidth: 380
+                                font.bold: true
+                            }
+
+                            RowLayout {
+                                spacing: 10
+                                Layout.fillWidth: true
+
+                                Rectangle {
+                                    id: customCoverBox
+                                    implicitWidth: 54
+                                    implicitHeight: 54
+                                    color: "#1f2226"
+                                    radius: 6
+                                    border.color: pubDlg.customEpisodeCoverPath !== "" ? palette.highlight : palette.mid
+                                    clip: true
+
+                                    Image {
+                                        anchors.fill: parent
+                                        anchors.margins: 2
+                                        source: pubDlg.customEpisodeCoverPath !== "" ? ("file://" + pubDlg.customEpisodeCoverPath) : ""
+                                        visible: pubDlg.customEpisodeCoverPath !== ""
+                                        fillMode: Image.PreserveAspectCrop
+                                        asynchronous: true
+                                        cache: false
+                                    }
+
+                                    Label {
+                                        anchors.centerIn: parent
+                                        visible: pubDlg.customEpisodeCoverPath === ""
+                                        text: qsTr("Por defecto\ndel podcast")
+                                        color: palette.placeholderText
+                                        font.pixelSize: 8
+                                        horizontalAlignment: Text.AlignHCenter
+                                    }
+
+                                    MouseArea {
+                                        id: customCoverHover
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                    }
+                                    ToolTip {
+                                        visible: customCoverHover.containsMouse
+                                        delay: 500
+                                        text: qsTr("Asigna una portada exclusiva para este episodio. Si no seleccionas ninguna, se usará la portada por defecto del podcast o las portadas de los capítulos.")
+                                    }
+                                }
+
+                                ColumnLayout {
+                                    spacing: 4
+                                    Layout.fillWidth: true
+
+                                    RowLayout {
+                                        spacing: 6
+                                        Button {
+                                            text: pubDlg.customEpisodeCoverPath === ""
+                                                ? qsTr("Seleccionar portada…")
+                                                : qsTr("Cambiar portada…")
+                                            onClicked: customCoverPicker.open()
+                                        }
+                                        Button {
+                                            text: qsTr("Quitar")
+                                            visible: pubDlg.customEpisodeCoverPath !== ""
+                                            onClicked: pubDlg.customEpisodeCoverPath = ""
+                                        }
+                                    }
+                                    Label {
+                                        visible: pubDlg.customEpisodeCoverPath !== ""
+                                        text: FileHelper.fileName(pubDlg.customEpisodeCoverPath)
+                                        color: palette.text
+                                        font.pixelSize: 11
+                                        elide: Text.ElideMiddle
+                                        Layout.maximumWidth: 160
+                                    }
+                                }
                             }
                         }
-                        Item { Layout.fillWidth: true }
+
+                        // Separador vertical
+                        Rectangle {
+                            Layout.fillHeight: true
+                            Layout.minimumHeight: 70
+                            Layout.preferredWidth: 1
+                            color: palette.mid
+                        }
+
+                        // Columna derecha: Adjuntos detectados
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            Layout.preferredWidth: 1
+                            Layout.alignment: Qt.AlignTop
+                            spacing: 8
+
+                            Label {
+                                text: qsTr("Adjuntos detectados")
+                                color: palette.text
+                                font.bold: true
+                            }
+
+                            ColumnLayout {
+                                spacing: 4
+                                Layout.fillWidth: true
+
+                                RowLayout {
+                                    spacing: 6
+                                    Text {
+                                        text: ChapterModel.count > 0 ? "✓" : "—"
+                                        color: ChapterModel.count > 0 ? "#2ecc71" : palette.placeholderText
+                                        font.bold: true; font.pixelSize: 13
+                                    }
+                                    Label {
+                                        color: palette.text
+                                        font.pixelSize: 11
+                                        text: ChapterModel.count > 0
+                                            ? qsTr("%1 capítulos (con imágenes locales se suben al servidor)").arg(ChapterModel.count)
+                                            : qsTr("Sin capítulos")
+                                        elide: Text.ElideRight
+                                        Layout.fillWidth: true
+                                    }
+                                }
+                                RowLayout {
+                                    spacing: 6
+                                    Text {
+                                        text: pubDlg.transcriptPath !== "" ? "✓" : "—"
+                                        color: pubDlg.transcriptPath !== "" ? "#2ecc71" : palette.placeholderText
+                                        font.bold: true; font.pixelSize: 13
+                                    }
+                                    Label {
+                                        color: palette.text
+                                        font.pixelSize: 11
+                                        text: pubDlg.transcriptPath !== ""
+                                            ? qsTr("Transcripción adjunta: %1").arg(FileHelper.fileName(pubDlg.transcriptPath))
+                                            : qsTr("Sin transcripción")
+                                        elide: Text.ElideMiddle
+                                        Layout.maximumWidth: 160
+                                    }
+                                }
+                            }
+
+                            Button {
+                                text: pubDlg.transcriptPath === ""
+                                    ? qsTr("Adjuntar transcripción…")
+                                    : qsTr("Cambiar transcripción…")
+                                onClicked: transcriptPicker.open()
+                            }
+                        }
                     }
 
                     QtObject {
@@ -478,49 +566,6 @@ Dialog {
                         }
                     }
 
-                    Rectangle { Layout.fillWidth: true; height: 1; color: palette.mid }
-
-                    // Resumen de extras
-                    Label {
-                        text: qsTr("Adjuntos detectados")
-                        color: palette.text; font.bold: true
-                    }
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 4
-                        RowLayout {
-                            Text {
-                                text: ChapterModel.count > 0 ? "✓" : "—"
-                                color: ChapterModel.count > 0 ? "#2ecc71" : palette.placeholderText
-                                font.bold: true; font.pixelSize: 14
-                            }
-                            Label {
-                                color: palette.text
-                                text: ChapterModel.count > 0
-                                    ? qsTr("%1 capítulos (con imágenes locales se suben al servidor)").arg(ChapterModel.count)
-                                    : qsTr("Sin capítulos")
-                            }
-                        }
-                        RowLayout {
-                            Text {
-                                text: pubDlg.transcriptPath !== "" ? "✓" : "—"
-                                color: pubDlg.transcriptPath !== "" ? "#2ecc71" : palette.placeholderText
-                                font.bold: true; font.pixelSize: 14
-                            }
-                            Label {
-                                color: palette.text
-                                text: pubDlg.transcriptPath !== ""
-                                    ? qsTr("Transcripción adjunta: %1").arg(FileHelper.fileName(pubDlg.transcriptPath))
-                                    : qsTr("Sin transcripción")
-                            }
-                        }
-                    }
-                    Button {
-                        text: pubDlg.transcriptPath === ""
-                            ? qsTr("Adjuntar transcripción…")
-                            : qsTr("Cambiar transcripción…")
-                        onClicked: transcriptPicker.open()
-                    }
                     QtObject {
                         id: transcriptPicker
                         function open() {
