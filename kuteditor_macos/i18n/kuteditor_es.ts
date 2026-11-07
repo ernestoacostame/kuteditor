@@ -788,6 +788,40 @@ Crea uno desde el panel web de KutPod.</translation>
       <translation>No se pudo exportar: %1</translation>
     </message>
     <message>
+      <source>Portada del episodio (opcional)</source>
+      <translation>Portada del episodio (opcional)</translation>
+    </message>
+    <message>
+      <source>Asigna una portada exclusiva para este episodio. Si no seleccionas ninguna, se usará la portada por defecto del podcast o las portadas de los capítulos.</source>
+      <translation>Asigna una portada exclusiva para este episodio. Si no seleccionas ninguna, se usará la portada por defecto del podcast o las portadas de los capítulos.</translation>
+    </message>
+    <message>
+      <source>Por defecto
+del podcast</source>
+      <translation>Por defecto
+del podcast</translation>
+    </message>
+    <message>
+      <source>Seleccionar portada…</source>
+      <translation>Seleccionar portada…</translation>
+    </message>
+    <message>
+      <source>Cambiar portada…</source>
+      <translation>Cambiar portada…</translation>
+    </message>
+    <message>
+      <source>Quitar</source>
+      <translation>Quitar</translation>
+    </message>
+    <message>
+      <source>Seleccionar portada del episodio</source>
+      <translation>Seleccionar portada del episodio</translation>
+    </message>
+    <message>
+      <source>Imágenes (*.jpg *.jpeg *.png *.webp)</source>
+      <translation>Imágenes (*.jpg *.jpeg *.png *.webp)</translation>
+    </message>
+    <message>
       <source>Podcast destino</source>
       <translation>Podcast destino</translation>
     </message>
@@ -965,6 +999,40 @@ Crea uno desde el panel web de KutPod.</translation>
     <message>
       <source>No se pudo exportar: %1</source>
       <translation>No se pudo exportar: %1</translation>
+    </message>
+    <message>
+      <source>Portada del episodio (opcional)</source>
+      <translation>Portada del episodio (opcional)</translation>
+    </message>
+    <message>
+      <source>Asigna una portada exclusiva para este episodio. Si no seleccionas ninguna, se usará la portada por defecto del podcast o las portadas de los capítulos.</source>
+      <translation>Asigna una portada exclusiva para este episodio. Si no seleccionas ninguna, se usará la portada por defecto del podcast o las portadas de los capítulos.</translation>
+    </message>
+    <message>
+      <source>Por defecto
+del podcast</source>
+      <translation>Por defecto
+del podcast</translation>
+    </message>
+    <message>
+      <source>Seleccionar portada…</source>
+      <translation>Seleccionar portada…</translation>
+    </message>
+    <message>
+      <source>Cambiar portada…</source>
+      <translation>Cambiar portada…</translation>
+    </message>
+    <message>
+      <source>Quitar</source>
+      <translation>Quitar</translation>
+    </message>
+    <message>
+      <source>Seleccionar portada del episodio</source>
+      <translation>Seleccionar portada del episodio</translation>
+    </message>
+    <message>
+      <source>Imágenes (*.jpg *.jpeg *.png *.webp)</source>
+      <translation>Imágenes (*.jpg *.jpeg *.png *.webp)</translation>
     </message>
     <message>
       <source>Podcast destino</source>

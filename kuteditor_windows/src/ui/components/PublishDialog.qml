@@ -22,14 +22,6 @@ Dialog {
     height: 640
     anchors.centerIn: parent
     standardButtons: Dialog.NoButton
-    palette.window: "#22252a"
-    palette.windowText: "#ecf0f1"
-    palette.text: "#ecf0f1"
-    palette.base: "#2a2d32"
-    palette.button: "#34383d"
-    palette.buttonText: "#ecf0f1"
-    palette.toolTipBase: "#1a1d21"
-    palette.toolTipText: "#ecf0f1"
 
     // Configuración de exportación (heredada de main.qml)
     property int prefSampleRate: 48000
@@ -45,6 +37,7 @@ Dialog {
     property string _errorMsg: ""
     property string _episodeUrl: ""
     property bool   _publishing: false
+    property string customEpisodeCoverPath: ""
 
     function reset() {
         _selectedPodcastId = ""
@@ -55,6 +48,7 @@ Dialog {
         _errorMsg = ""
         _episodeUrl = ""
         _publishing = false
+        customEpisodeCoverPath = ""
     }
 
     onOpened: {
@@ -97,26 +91,11 @@ Dialog {
                 Label { text: qsTr("URL"); color: palette.text }
                 TextField { id: lu; Layout.fillWidth: true
                     placeholderText: "https://www.tupodcast.com"
-                    text: KutPod.baseUrl || "https://"
-                    color: palette.text
-                    placeholderTextColor: "#95a5a6"
-                    palette.text: palette.text
-                    palette.placeholderText: "#95a5a6"
-                }
+                    text: KutPod.baseUrl || "https://" }
                 Label { text: qsTr("Usuario"); color: palette.text }
-                TextField { id: lus; Layout.fillWidth: true; text: KutPod.currentUser
-                    color: palette.text
-                    placeholderTextColor: "#95a5a6"
-                    palette.text: palette.text
-                    palette.placeholderText: "#95a5a6"
-                }
+                TextField { id: lus; Layout.fillWidth: true; text: KutPod.currentUser }
                 Label { text: qsTr("Contraseña"); color: palette.text }
-                TextField { id: lp; Layout.fillWidth: true; echoMode: TextInput.Password
-                    color: palette.text
-                    placeholderTextColor: "#95a5a6"
-                    palette.text: palette.text
-                    palette.placeholderText: "#95a5a6"
-                }
+                TextField { id: lp; Layout.fillWidth: true; echoMode: TextInput.Password }
                 Label {
                     id: miniErr; color: "#e74c3c"; wrapMode: Text.WordWrap
                     Layout.fillWidth: true; visible: text !== ""
@@ -265,10 +244,6 @@ Dialog {
                         id: titleField
                         Layout.fillWidth: true
                         text: meta.title
-                        color: palette.text
-                        placeholderTextColor: "#95a5a6"
-                        palette.text: palette.text
-                        palette.placeholderText: "#95a5a6"
                     }
 
                     // Descripción
@@ -348,10 +323,6 @@ Dialog {
                         objectName: "authorField"
                         Layout.fillWidth: true
                         text: meta.author
-                        color: palette.text
-                        placeholderTextColor: "#95a5a6"
-                        palette.text: palette.text
-                        palette.placeholderText: "#95a5a6"
                     }
 
                     Rectangle { Layout.fillWidth: true; height: 1; color: palette.mid }
@@ -361,8 +332,6 @@ Dialog {
                         objectName: "scheduleCheck"
                         text: qsTr("Programar publicación")
                         checked: meta.publishAt && meta.publishAt !== ""
-                        palette.windowText: "#ecf0f1"
-                        palette.text: "#ecf0f1"
                     }
                     RowLayout {
                         Layout.fillWidth: true
@@ -379,10 +348,93 @@ Dialog {
                                 d.setHours(d.getHours() + 1);
                                 return Qt.formatDateTime(d, "yyyy-MM-dd hh:mm");
                             })()
-                            color: palette.text
-                            placeholderTextColor: "#95a5a6"
-                            palette.text: palette.text
-                            palette.placeholderText: "#95a5a6"
+                        }
+                    }
+
+                    Rectangle { Layout.fillWidth: true; height: 1; color: palette.mid }
+
+                    // Portada personalizada del episodio (opcional)
+                    Label {
+                        text: qsTr("Portada del episodio (opcional)")
+                        color: palette.text
+                        font.bold: true
+                    }
+                    Label {
+                        text: qsTr("Asigna una portada exclusiva para este episodio. Si no seleccionas ninguna, se usará la portada por defecto del podcast o las portadas de los capítulos.")
+                        color: palette.placeholderText
+                        font.pixelSize: 11
+                        wrapMode: Text.WordWrap
+                        Layout.fillWidth: true
+                    }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 12
+
+                        Rectangle {
+                            id: customCoverBox
+                            implicitWidth: 64
+                            implicitHeight: 64
+                            color: "#1f2226"
+                            radius: 6
+                            border.color: pubDlg.customEpisodeCoverPath !== "" ? palette.highlight : palette.mid
+                            clip: true
+
+                            Image {
+                                anchors.fill: parent
+                                anchors.margins: 2
+                                source: pubDlg.customEpisodeCoverPath !== "" ? ("file://" + pubDlg.customEpisodeCoverPath) : ""
+                                visible: pubDlg.customEpisodeCoverPath !== ""
+                                fillMode: Image.PreserveAspectCrop
+                                asynchronous: true
+                                cache: false
+                            }
+
+                            Label {
+                                anchors.centerIn: parent
+                                visible: pubDlg.customEpisodeCoverPath === ""
+                                text: qsTr("Por defecto\ndel podcast")
+                                color: palette.placeholderText
+                                font.pixelSize: 9
+                                horizontalAlignment: Text.AlignHCenter
+                            }
+                        }
+
+                        ColumnLayout {
+                            spacing: 6
+                            RowLayout {
+                                spacing: 8
+                                Button {
+                                    text: pubDlg.customEpisodeCoverPath === ""
+                                        ? qsTr("Seleccionar portada…")
+                                        : qsTr("Cambiar portada…")
+                                    onClicked: customCoverPicker.open()
+                                }
+                                Button {
+                                    text: qsTr("Quitar")
+                                    visible: pubDlg.customEpisodeCoverPath !== ""
+                                    onClicked: pubDlg.customEpisodeCoverPath = ""
+                                }
+                            }
+                            Label {
+                                visible: pubDlg.customEpisodeCoverPath !== ""
+                                text: FileHelper.fileName(pubDlg.customEpisodeCoverPath)
+                                color: palette.text
+                                font.pixelSize: 11
+                                elide: Text.ElideMiddle
+                                Layout.maximumWidth: 380
+                            }
+                        }
+                        Item { Layout.fillWidth: true }
+                    }
+
+                    FileDialog {
+                        id: customCoverPicker
+                        title: qsTr("Seleccionar portada del episodio")
+                        nameFilters: [qsTr("Imágenes (*.jpg *.jpeg *.png *.webp)")]
+                        onAccepted: {
+                            var p = selectedFile.toString()
+                            if (p.startsWith("file://")) p = p.substring(7)
+                            pubDlg.customEpisodeCoverPath = p
                         }
                     }
 
@@ -605,8 +657,7 @@ Dialog {
             episodeType:    epTypeVal,
             publishAt:      scheduleVal,
             audioPath:      _tmpExportPath,
-            coverPath:      ProjectIO.metadata && ProjectIO.metadata.coverPath
-                              ? ProjectIO.metadata.coverPath : "",
+            coverPath:      pubDlg.customEpisodeCoverPath,
             transcriptPath: pubDlg.transcriptPath,
             chapters:       chapters
         }

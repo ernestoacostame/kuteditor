@@ -45,6 +45,7 @@ Dialog {
     property string _errorMsg: ""
     property string _episodeUrl: ""
     property bool   _publishing: false
+    property string customEpisodeCoverPath: ""
 
     function reset() {
         _selectedPodcastId = ""
@@ -55,6 +56,7 @@ Dialog {
         _errorMsg = ""
         _episodeUrl = ""
         _publishing = false
+        customEpisodeCoverPath = ""
     }
 
     onOpened: {
@@ -388,6 +390,96 @@ Dialog {
 
                     Rectangle { Layout.fillWidth: true; height: 1; color: palette.mid }
 
+                    // Portada personalizada del episodio (opcional)
+                    Label {
+                        text: qsTr("Portada del episodio (opcional)")
+                        color: palette.text
+                        font.bold: true
+                    }
+                    Label {
+                        text: qsTr("Asigna una portada exclusiva para este episodio. Si no seleccionas ninguna, se usará la portada por defecto del podcast o las portadas de los capítulos.")
+                        color: palette.placeholderText
+                        font.pixelSize: 11
+                        wrapMode: Text.WordWrap
+                        Layout.fillWidth: true
+                    }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 12
+
+                        Rectangle {
+                            id: customCoverBox
+                            implicitWidth: 64
+                            implicitHeight: 64
+                            color: "#1f2226"
+                            radius: 6
+                            border.color: pubDlg.customEpisodeCoverPath !== "" ? palette.highlight : palette.mid
+                            clip: true
+
+                            Image {
+                                anchors.fill: parent
+                                anchors.margins: 2
+                                source: pubDlg.customEpisodeCoverPath !== "" ? ("file://" + pubDlg.customEpisodeCoverPath) : ""
+                                visible: pubDlg.customEpisodeCoverPath !== ""
+                                fillMode: Image.PreserveAspectCrop
+                                asynchronous: true
+                                cache: false
+                            }
+
+                            Label {
+                                anchors.centerIn: parent
+                                visible: pubDlg.customEpisodeCoverPath === ""
+                                text: qsTr("Por defecto\ndel podcast")
+                                color: palette.placeholderText
+                                font.pixelSize: 9
+                                horizontalAlignment: Text.AlignHCenter
+                            }
+                        }
+
+                        ColumnLayout {
+                            spacing: 6
+                            RowLayout {
+                                spacing: 8
+                                Button {
+                                    text: pubDlg.customEpisodeCoverPath === ""
+                                        ? qsTr("Seleccionar portada…")
+                                        : qsTr("Cambiar portada…")
+                                    onClicked: customCoverPicker.open()
+                                }
+                                Button {
+                                    text: qsTr("Quitar")
+                                    visible: pubDlg.customEpisodeCoverPath !== ""
+                                    onClicked: pubDlg.customEpisodeCoverPath = ""
+                                }
+                            }
+                            Label {
+                                visible: pubDlg.customEpisodeCoverPath !== ""
+                                text: FileHelper.fileName(pubDlg.customEpisodeCoverPath)
+                                color: palette.text
+                                font.pixelSize: 11
+                                elide: Text.ElideMiddle
+                                Layout.maximumWidth: 380
+                            }
+                        }
+                        Item { Layout.fillWidth: true }
+                    }
+
+                    QtObject {
+                        id: customCoverPicker
+                        function open() {
+                            const path = FileHelper.getOpenFileName(
+                                qsTr("Seleccionar portada del episodio"),
+                                FileHelper.homeDir() + "/Pictures",
+                                "Im\u00e1genes (*.jpg *.jpeg *.png *.webp)"
+                            )
+                            if (path !== "") {
+                                pubDlg.customEpisodeCoverPath = path
+                            }
+                        }
+                    }
+
+                    Rectangle { Layout.fillWidth: true; height: 1; color: palette.mid }
+
                     // Resumen de extras
                     Label {
                         text: qsTr("Adjuntos detectados")
@@ -609,8 +701,7 @@ Dialog {
             episodeType:    epTypeVal,
             publishAt:      scheduleVal,
             audioPath:      _tmpExportPath,
-            coverPath:      ProjectIO.metadata && ProjectIO.metadata.coverPath
-                              ? ProjectIO.metadata.coverPath : "",
+            coverPath:      pubDlg.customEpisodeCoverPath,
             transcriptPath: pubDlg.transcriptPath,
             chapters:       chapters
         }

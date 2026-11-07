@@ -788,6 +788,40 @@ Create one from the KutPod web panel.</translation>
       <translation>Could not export: %1</translation>
     </message>
     <message>
+      <source>Portada del episodio (opcional)</source>
+      <translation>Episode cover (optional)</translation>
+    </message>
+    <message>
+      <source>Asigna una portada exclusiva para este episodio. Si no seleccionas ninguna, se usará la portada por defecto del podcast o las portadas de los capítulos.</source>
+      <translation>Assign an exclusive cover for this episode. If none is selected, the default podcast cover or chapter covers will be used.</translation>
+    </message>
+    <message>
+      <source>Por defecto
+del podcast</source>
+      <translation>Default
+podcast cover</translation>
+    </message>
+    <message>
+      <source>Seleccionar portada…</source>
+      <translation>Select cover…</translation>
+    </message>
+    <message>
+      <source>Cambiar portada…</source>
+      <translation>Change cover…</translation>
+    </message>
+    <message>
+      <source>Quitar</source>
+      <translation>Remove</translation>
+    </message>
+    <message>
+      <source>Seleccionar portada del episodio</source>
+      <translation>Select episode cover</translation>
+    </message>
+    <message>
+      <source>Imágenes (*.jpg *.jpeg *.png *.webp)</source>
+      <translation>Images (*.jpg *.jpeg *.png *.webp)</translation>
+    </message>
+    <message>
       <source>Podcast destino</source>
       <translation>Target podcast</translation>
     </message>
@@ -965,6 +999,40 @@ Create one from the KutPod web panel.</translation>
     <message>
       <source>No se pudo exportar: %1</source>
       <translation>Could not export: %1</translation>
+    </message>
+    <message>
+      <source>Portada del episodio (opcional)</source>
+      <translation>Episode cover (optional)</translation>
+    </message>
+    <message>
+      <source>Asigna una portada exclusiva para este episodio. Si no seleccionas ninguna, se usará la portada por defecto del podcast o las portadas de los capítulos.</source>
+      <translation>Assign an exclusive cover for this episode. If none is selected, the default podcast cover or chapter covers will be used.</translation>
+    </message>
+    <message>
+      <source>Por defecto
+del podcast</source>
+      <translation>Default
+podcast cover</translation>
+    </message>
+    <message>
+      <source>Seleccionar portada…</source>
+      <translation>Select cover…</translation>
+    </message>
+    <message>
+      <source>Cambiar portada…</source>
+      <translation>Change cover…</translation>
+    </message>
+    <message>
+      <source>Quitar</source>
+      <translation>Remove</translation>
+    </message>
+    <message>
+      <source>Seleccionar portada del episodio</source>
+      <translation>Select episode cover</translation>
+    </message>
+    <message>
+      <source>Imágenes (*.jpg *.jpeg *.png *.webp)</source>
+      <translation>Images (*.jpg *.jpeg *.png *.webp)</translation>
     </message>
     <message>
       <source>Podcast destino</source>
