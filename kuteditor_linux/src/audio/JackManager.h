@@ -32,6 +32,7 @@ struct JackDevice {
     bool isInput = true;       // true si tiene puertos de CAPTURA
     QStringList portNames;     // lista de puertos físicos (nombres completos)
     int channelCount = 0;      // portNames.size()
+    bool isPhysical = false;   // true si corresponde a hardware físico
 };
 
 /**

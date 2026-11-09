@@ -6,6 +6,9 @@
 #include <QMetaObject>
 #include <QMutex>
 #include <QMutexLocker>
+#include <QRegularExpression>
+#include <QSet>
+#include <algorithm>
 #include <cstring>
 
 #ifdef HAVE_JACK
@@ -351,17 +354,47 @@ void JackManager::refreshDevices()
 #ifdef HAVE_JACK
     if (m_impl && m_impl->client) {
         const QString myClient = QString::fromUtf8(jack_get_client_name(m_impl->client));
+        static const QRegularExpression pwNumSuffixRx(QStringLiteral("^(.*)-(\\d+)$"));
+
+        auto isExcludedClient = [&](const QString &c) {
+            if (c.isEmpty() || c == myClient) return true;
+            if (c.startsWith(QLatin1String("loopback"), Qt::CaseInsensitive)) return true;
+            if (c.contains(QLatin1String("loopback-"), Qt::CaseInsensitive)) return true;
+            if (c.startsWith(QLatin1String("Midi-"), Qt::CaseInsensitive)) return true;
+            if (c.startsWith(QLatin1String("bluez_"), Qt::CaseInsensitive)) return true;
+            if (c.startsWith(QLatin1String("v4l2_"), Qt::CaseInsensitive)) return true;
+            if (c.startsWith(QLatin1String("Freewheel-"), Qt::CaseInsensitive)) return true;
+            if (c.startsWith(QLatin1String("Dummy-"), Qt::CaseInsensitive)) return true;
+            return false;
+        };
 
         // Enumerar puertos de captura (= inputs para la app, físicos o virtuales como UNIFY)
         const char **capturePorts = jack_get_ports(
             m_impl->client, nullptr, JACK_DEFAULT_AUDIO_TYPE,
             JackPortIsOutput);
         if (capturePorts) {
+            // Conjunto previo de clientes para descartar alias/subnodos numerados de PipeWire
+            QSet<QString> allClientNames;
+            for (const char **p = capturePorts; *p; ++p) {
+                const QString c = ::clientOf(QString::fromUtf8(*p));
+                if (!isExcludedClient(c)) {
+                    allClientNames.insert(c);
+                }
+            }
+
             QHash<QString, JackDevice> byClient;
             for (const char **p = capturePorts; *p; ++p) {
                 const QString portName = QString::fromUtf8(*p);
                 const QString client = ::clientOf(portName);
-                if (client == myClient) continue; // Evitar retroalimentarse de sus propias pistas o outputs
+                if (isExcludedClient(client)) continue;
+
+                // Si este cliente tiene sufijo numérico (ej. "UNIFY-Chat-75" o "UNIFY-Chat-208")
+                // y el cliente base ("UNIFY-Chat") existe, descartar el subnodo duplicado.
+                const auto match = pwNumSuffixRx.match(client);
+                if (match.hasMatch() && allClientNames.contains(match.captured(1))) {
+                    continue;
+                }
+
                 auto &dev = byClient[client];
                 if (dev.id.isEmpty()) {
                     dev.id = client;
@@ -369,11 +402,27 @@ void JackManager::refreshDevices()
                     dev.description = client;
                     dev.isInput = true;
                 }
+                jack_port_t *jp = jack_port_by_name(m_impl->client, *p);
+                if (jp && (jack_port_flags(jp) & JackPortIsPhysical)) {
+                    dev.isPhysical = true;
+                }
                 dev.portNames.append(portName);
                 dev.channelCount = dev.portNames.size();
             }
             jack_free(capturePorts);
-            for (const auto &d : byClient) allInputs.append(d);
+
+            // Ordenar: dispositivos físicos primero, luego virtuales ordenados alfabéticamente
+            QVector<JackDevice> sortedInputs;
+            sortedInputs.reserve(byClient.size());
+            for (const auto &d : byClient) sortedInputs.append(d);
+            std::sort(sortedInputs.begin(), sortedInputs.end(), [](const JackDevice &a, const JackDevice &b) {
+                if (a.isPhysical != b.isPhysical) {
+                    return a.isPhysical > b.isPhysical; // Físicos primero
+                }
+                return a.name.localeAwareCompare(b.name) < 0;
+            });
+
+            for (const auto &d : sortedInputs) allInputs.append(d);
         }
 
         // Enumerar puertos de playback (= outputs para la app, físicos o virtuales)
@@ -381,11 +430,25 @@ void JackManager::refreshDevices()
             m_impl->client, nullptr, JACK_DEFAULT_AUDIO_TYPE,
             JackPortIsInput);
         if (playbackPorts) {
+            QSet<QString> allClientNames;
+            for (const char **p = playbackPorts; *p; ++p) {
+                const QString c = ::clientOf(QString::fromUtf8(*p));
+                if (!isExcludedClient(c)) {
+                    allClientNames.insert(c);
+                }
+            }
+
             QHash<QString, JackDevice> byClient;
             for (const char **p = playbackPorts; *p; ++p) {
                 const QString portName = QString::fromUtf8(*p);
                 const QString client = ::clientOf(portName);
-                if (client == myClient) continue; // No listarse a sí mismo como destino
+                if (isExcludedClient(client)) continue;
+
+                const auto match = pwNumSuffixRx.match(client);
+                if (match.hasMatch() && allClientNames.contains(match.captured(1))) {
+                    continue;
+                }
+
                 auto &dev = byClient[client];
                 if (dev.id.isEmpty()) {
                     dev.id = client;
@@ -393,11 +456,26 @@ void JackManager::refreshDevices()
                     dev.description = client;
                     dev.isInput = false;
                 }
+                jack_port_t *jp = jack_port_by_name(m_impl->client, *p);
+                if (jp && (jack_port_flags(jp) & JackPortIsPhysical)) {
+                    dev.isPhysical = true;
+                }
                 dev.portNames.append(portName);
                 dev.channelCount = dev.portNames.size();
             }
             jack_free(playbackPorts);
-            for (const auto &d : byClient) allOutputs.append(d);
+
+            QVector<JackDevice> sortedOutputs;
+            sortedOutputs.reserve(byClient.size());
+            for (const auto &d : byClient) sortedOutputs.append(d);
+            std::sort(sortedOutputs.begin(), sortedOutputs.end(), [](const JackDevice &a, const JackDevice &b) {
+                if (a.isPhysical != b.isPhysical) {
+                    return a.isPhysical > b.isPhysical;
+                }
+                return a.name.localeAwareCompare(b.name) < 0;
+            });
+
+            for (const auto &d : sortedOutputs) allOutputs.append(d);
         }
     }
 #endif
