@@ -17,6 +17,8 @@ CMakeUserPresets.json
 # Compilación y artefactos
 build/
 **/build/
+pkg/
+**/pkg/
 cmake-build-*/
 *.o
 *.obj
