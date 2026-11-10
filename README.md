@@ -1,3 +1,7 @@
+<img width="1498" height="960" alt="kuteditor" src="https://github.com/user-attachments/assets/07542c9d-029a-4b40-924a-5ba2dcf8acd4" />
+<img width="1498" height="960" alt="kuteditor_editor" src="https://github.com/user-attachments/assets/18786c03-61f1-401f-bb2e-a6f0f486d8aa" />
+<img width="1407" height="868" alt="kuteditor_chapters_editor" src="https://github.com/user-attachments/assets/569b2c0b-856d-400b-9fd0-6198a9015d7a" />
+
 # KutEditor
 
 <p align="center">
