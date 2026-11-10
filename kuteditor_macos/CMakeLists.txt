@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
-project(kuteditor VERSION 2.71 LANGUAGES C CXX)
-set(CPACK_PACKAGE_VERSION "2.71")
+project(kuteditor VERSION 2.72 LANGUAGES C CXX)
+set(CPACK_PACKAGE_VERSION "2.72")
 
 set(CMAKE_OSX_DEPLOYMENT_TARGET "15.0" CACHE STRING "Minimum macOS version" FORCE)
 

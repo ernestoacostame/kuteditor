@@ -70,6 +70,13 @@ QString clientOf(const QString &portName)
     return colon > 0 ? portName.left(colon) : portName;
 }
 
+// Obtiene el nombre del puerto sin el prefijo del cliente ("Client:port" -> "port")
+QString shortPortOf(const QString &portName)
+{
+    const int colon = portName.indexOf(':');
+    return colon >= 0 ? portName.mid(colon + 1) : portName;
+}
+
 int on_process_impl(jack_nframes_t nframes, void *arg)
 {
     auto *impl = static_cast<JackManager::Impl*>(arg);
@@ -388,6 +395,21 @@ void JackManager::refreshDevices()
                 const QString client = ::clientOf(portName);
                 if (isExcludedClient(client)) continue;
 
+                jack_port_t *jp = jack_port_by_name(m_impl->client, *p);
+                const bool isPhys = jp && (jack_port_flags(jp) & JackPortIsPhysical);
+
+                // FILTRAR APLICACIONES (streams de reproducción virtuales como Zen, Spotify, Chrome, etc.):
+                // En Linux/PipeWire, las aplicaciones reproduciendo audio crean puertos llamados "output_*" u "out_*".
+                // Los dispositivos reales (físicos o virtuales como UNIFY) usan puertos de captura ("capture_*")
+                // o monitores de canales ("monitor_*").
+                if (!isPhys) {
+                    const QString shortName = ::shortPortOf(portName);
+                    if (shortName.startsWith(QLatin1String("output"), Qt::CaseInsensitive) ||
+                        shortName.startsWith(QLatin1String("out"), Qt::CaseInsensitive)) {
+                        continue; // Descartar aplicaciones
+                    }
+                }
+
                 // Si este cliente tiene sufijo numérico (ej. "UNIFY-Chat-75" o "UNIFY-Chat-208")
                 // y el cliente base ("UNIFY-Chat") existe, descartar el subnodo duplicado.
                 const auto match = pwNumSuffixRx.match(client);
@@ -402,8 +424,7 @@ void JackManager::refreshDevices()
                     dev.description = client;
                     dev.isInput = true;
                 }
-                jack_port_t *jp = jack_port_by_name(m_impl->client, *p);
-                if (jp && (jack_port_flags(jp) & JackPortIsPhysical)) {
+                if (isPhys) {
                     dev.isPhysical = true;
                 }
                 dev.portNames.append(portName);
@@ -444,6 +465,20 @@ void JackManager::refreshDevices()
                 const QString client = ::clientOf(portName);
                 if (isExcludedClient(client)) continue;
 
+                jack_port_t *jp = jack_port_by_name(m_impl->client, *p);
+                const bool isPhys = jp && (jack_port_flags(jp) & JackPortIsPhysical);
+
+                // FILTRAR APLICACIONES DE GRABACIÓN (streams virtuales como OBS, Discord, etc.):
+                // En Linux/PipeWire, las aplicaciones que graban tienen entradas llamadas "input_*" o "in_*".
+                // Los destinos reales de salida (sinks de audio) usan puertos de reproducción ("playback_*").
+                if (!isPhys) {
+                    const QString shortName = ::shortPortOf(portName);
+                    if (shortName.startsWith(QLatin1String("input"), Qt::CaseInsensitive) ||
+                        shortName.startsWith(QLatin1String("in_"), Qt::CaseInsensitive)) {
+                        continue; // Descartar aplicaciones
+                    }
+                }
+
                 const auto match = pwNumSuffixRx.match(client);
                 if (match.hasMatch() && allClientNames.contains(match.captured(1))) {
                     continue;
@@ -456,8 +491,7 @@ void JackManager::refreshDevices()
                     dev.description = client;
                     dev.isInput = false;
                 }
-                jack_port_t *jp = jack_port_by_name(m_impl->client, *p);
-                if (jp && (jack_port_flags(jp) & JackPortIsPhysical)) {
+                if (isPhys) {
                     dev.isPhysical = true;
                 }
                 dev.portNames.append(portName);
