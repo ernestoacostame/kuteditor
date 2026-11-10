@@ -23,6 +23,7 @@ Rectangle {
 
     property var currentPodcast: null
     property var episodesData: ({ items: [], page: 1, pages: 1, total: 0 })
+    property int pageSize: 9
     property string lastQuery: ""
     property string loginErrorText: ""
     property string episodesErrorText: ""
@@ -275,7 +276,7 @@ Rectangle {
                                     onClicked: {
                                         olib.currentPodcast = modelData
                                         olib._resetEpisodes()
-                                        KutPod.fetchEpisodes(String(modelData.id), 1, 10, "")
+                                        KutPod.fetchEpisodes(String(modelData.id), 1, olib.pageSize, "")
                                         olibStack.push(episodesPage)
                                     }
                                 }
@@ -308,7 +309,7 @@ Rectangle {
                 interval: 350; repeat: false
                 onTriggered: {
                     olib.lastQuery = searchField.text.trim()
-                    KutPod.fetchEpisodes(String(olib.currentPodcast.id), 1, 10, olib.lastQuery)
+                    KutPod.fetchEpisodes(String(olib.currentPodcast.id), 1, olib.pageSize, olib.lastQuery)
                 }
             }
 
@@ -434,25 +435,31 @@ Rectangle {
                                         visible: text !== ""
                                     }
                                     Button {
+                                        text: qsTr("Ver")
+                                        flat: true
+                                        ToolTip.visible: hovered
+                                        ToolTip.text: qsTr("Abrir episodio en el navegador")
+                                        onClicked: {
+                                            var pSlug = (olib.currentPodcast && (olib.currentPodcast.slug || olib.currentPodcast.id)) || ""
+                                            var eSlug = modelData.slug || modelData.id || ""
+                                            if (KutPod.baseUrl !== "" && pSlug !== "" && eSlug !== "") {
+                                                var base = KutPod.baseUrl.replace(/\/+$/, "")
+                                                Qt.openUrlExternally(base + "/@" + encodeURIComponent(pSlug) + "/" + encodeURIComponent(eSlug))
+                                            }
+                                        }
+                                    }
+                                    Button {
                                         text: qsTr("Editar")
                                         flat: true
+                                        ToolTip.visible: hovered
+                                        ToolTip.text: qsTr("Editar episodio en KutPod")
                                         onClicked: {
-                                            publishWindowLoader.item.editMode = true
-                                            publishWindowLoader.item.editEpisodeId = String(modelData.id)
-                                            publishWindowLoader.item._selectedPodcastId = String(olib.currentPodcast.id)
-                                            publishWindowLoader.item._selectedPodcastName = olib.currentPodcast.title || ""
-                                            // Pre-fill form by hijacking the projectMeta context, or creating a temp payload
-                                            publishWindowLoader.item._pendingPayload = {
-                                                title: modelData.title || "",
-                                                description: modelData.description || modelData.notes_md || "",
-                                                author: modelData.author || "",
-                                                episodeNumber: modelData.number || modelData.episode || 0,
-                                                seasonNumber: modelData.season || 1,
+                                            var pSlug = (olib.currentPodcast && (olib.currentPodcast.slug || olib.currentPodcast.id)) || ""
+                                            var eSlug = modelData.slug || modelData.id || ""
+                                            if (KutPod.baseUrl !== "" && pSlug !== "" && eSlug !== "") {
+                                                var base = KutPod.baseUrl.replace(/\/+$/, "")
+                                                Qt.openUrlExternally(base + "/admin/new-episode?id=" + encodeURIComponent(eSlug) + "&podcast=" + encodeURIComponent(pSlug))
                                             }
-                                            // The publishWindow will read these if we expose them, or we can just force the UI
-                                            // Actually, the PublishWindow uses _readField which reads from the text fields.
-                                            // Let's pass the meta object.
-                                            publishWindowLoader.item.open()
                                         }
                                     }
                                 }
@@ -481,7 +488,7 @@ Rectangle {
                             enabled: olib.episodesData.page > 1 && !KutPod.busy
                             onClicked: KutPod.fetchEpisodes(
                                 String(olib.currentPodcast.id),
-                                olib.episodesData.page - 1, 10, olib.lastQuery)
+                                olib.episodesData.page - 1, olib.pageSize, olib.lastQuery)
                         }
                         Item { Layout.fillWidth: true }
                         Label {
@@ -496,7 +503,7 @@ Rectangle {
                             enabled: olib.episodesData.page < olib.episodesData.pages && !KutPod.busy
                             onClicked: KutPod.fetchEpisodes(
                                 String(olib.currentPodcast.id),
-                                olib.episodesData.page + 1, 10, olib.lastQuery)
+                                olib.episodesData.page + 1, olib.pageSize, olib.lastQuery)
                         }
                     }
                 }
