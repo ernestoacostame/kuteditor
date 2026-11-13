@@ -1185,6 +1185,8 @@ ApplicationWindow {
             chapters.push(c)
         }
 
+        const durationSecs = Math.max(0, Math.round(AudioEngine.totalTime || 0))
+
         // Guardar el payload para usarlo en onExportFinished
         _pendingPayload = {
             title:          titleVal,
@@ -1194,6 +1196,8 @@ ApplicationWindow {
             seasonNumber:   seasonVal,
             episodeType:    epTypeVal,
             publishAt:      scheduleVal,
+            duration:       durationSecs,
+            duration_secs:  durationSecs,
             audioPath:      _tmpExportPath,
             coverPath:      pubWin.customEpisodeCoverPath,
             transcriptPath: pubWin.transcriptPath,

@@ -689,6 +689,8 @@ Dialog {
             chapters.push(c)
         }
 
+        const durationSecs = Math.max(0, Math.round(AudioEngine.totalTime || 0))
+
         const payload = {
             title:          titleVal,
             description:    descVal,
@@ -697,6 +699,8 @@ Dialog {
             seasonNumber:   seasonVal,
             episodeType:    epTypeVal,
             publishAt:      scheduleVal,
+            duration:       durationSecs,
+            duration_secs:  durationSecs,
             audioPath:      _tmpExportPath,
             coverPath:      pubDlg.customEpisodeCoverPath,
             transcriptPath: pubDlg.transcriptPath,

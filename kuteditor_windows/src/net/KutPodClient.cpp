@@ -409,6 +409,13 @@ void KutPodClient::publishEpisode(const QString &podcastId, const QVariantMap &d
         addTextPart(mp, "explicit", data.value("explicit").toBool() ? "1" : "0");
     if (data.contains("publishAt") && !data.value("publishAt").toString().isEmpty())
         addTextPart(mp, "publish_at", data.value("publishAt").toString());
+    if (data.contains("duration")) {
+        addTextPart(mp, "duration", QString::number(data.value("duration").toInt()));
+        addTextPart(mp, "duration_secs", QString::number(data.value("duration").toInt()));
+    } else if (data.contains("duration_secs")) {
+        addTextPart(mp, "duration", QString::number(data.value("duration_secs").toInt()));
+        addTextPart(mp, "duration_secs", QString::number(data.value("duration_secs").toInt()));
+    }
 
     // Audio
     addFilePart(mp, "audio", audio);
@@ -521,6 +528,13 @@ void KutPodClient::updateEpisode(const QString &podcastId, const QString &episod
         addTextPart(mp, "explicit", data.value("explicit").toBool() ? "1" : "0");
     if (data.contains("publishAt") && !data.value("publishAt").toString().isEmpty())
         addTextPart(mp, "publish_at", data.value("publishAt").toString());
+    if (data.contains("duration")) {
+        addTextPart(mp, "duration", QString::number(data.value("duration").toInt()));
+        addTextPart(mp, "duration_secs", QString::number(data.value("duration").toInt()));
+    } else if (data.contains("duration_secs")) {
+        addTextPart(mp, "duration", QString::number(data.value("duration_secs").toInt()));
+        addTextPart(mp, "duration_secs", QString::number(data.value("duration_secs").toInt()));
+    }
 
     // Audio (opcional en update)
     const QString audio = data.value("audioPath").toString();
