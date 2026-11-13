@@ -613,13 +613,27 @@ Rectangle {
                         src = src.substring(6)
 
                     if (lib.currentPodcast && src !== "") {
-                        const ext = src.substring(src.lastIndexOf("."))
+                        const ext = src.substring(src.lastIndexOf(".")).toLowerCase()
                         const dst = lib.currentPodcast.path + "/cover" + ext
+
+                        // Eliminar portadas previas con otra extensión si existen
+                        const exts = [".jpg", ".jpeg", ".png", ".webp"]
+                        for (let e = 0; e < exts.length; e++) {
+                            const oldCp = lib.currentPodcast.path + "/cover" + exts[e]
+                            if (oldCp !== dst && FileHelper.fileExists(oldCp)) {
+                                FileHelper.removeFile(oldCp)
+                            }
+                        }
+
                         const ok = FileHelper.copyFile(src, dst)
                         if (ok) {
-                            lib.currentPodcast.hasCover = true
-                            lib.currentPodcast.coverPath = dst
+                            let updated = Object.assign({}, lib.currentPodcast, {
+                                hasCover: true,
+                                coverPath: dst
+                            })
+                            lib.currentPodcast = updated
                             coverRevision++
+                            lib.refreshPodcasts()
                         }
                     }
                 }
@@ -669,19 +683,19 @@ Rectangle {
                                     id: coverImage
                                     anchors.fill: parent
                                     anchors.margins: 1
-                                    source: (lib.currentPodcast && lib.currentPodcast.hasCover)
-                                        ? "file://" + lib.currentPodcast.coverPath + "?v=" + coverRevision
+                                    source: (coverRevision >= 0 && lib.currentPodcast && lib.currentPodcast.hasCover)
+                                        ? ("file://" + lib.currentPodcast.coverPath + "?v=" + coverRevision)
                                         : ""
                                     sourceSize: Qt.size(300, 300)
-                                    asynchronous: true
+                                    asynchronous: false
                                     fillMode: Image.PreserveAspectCrop
-                                    visible: lib.currentPodcast && lib.currentPodcast.hasCover
+                                    visible: coverRevision >= 0 && lib.currentPodcast && lib.currentPodcast.hasCover
                                     cache: false
                                 }
 
                                 Column {
                                     anchors.centerIn: parent
-                                    visible: !(lib.currentPodcast && lib.currentPodcast.hasCover)
+                                    visible: !coverImage.visible
                                     spacing: 4
                                     Label {
                                         text: "🎙"
