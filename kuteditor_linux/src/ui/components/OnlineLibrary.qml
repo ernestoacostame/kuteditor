@@ -46,10 +46,22 @@ Rectangle {
     Connections {
         target: KutPod
         function onLoginSuccess(user) { 
+            olib.loginErrorText = ""
             olibStack.replace(podcastsPage)
             KutPod.fetchPodcasts() 
         }
         function onLoginFailed(reason) { olib.loginErrorText = reason }
+        function onSessionExpired(message) {
+            olib.loginErrorText = message
+            if (olibStack.currentItem !== loginPage) {
+                olibStack.replace(loginPage)
+            }
+        }
+        function onSessionChanged() {
+            if (!KutPod.loggedIn && olibStack.currentItem !== loginPage) {
+                olibStack.replace(loginPage)
+            }
+        }
         function onPodcastsLoaded(items) { /* binding ya actualiza */ }
         function onEpisodesLoaded(podcastId, items, total, page, pages) {
             if (!olib.currentPodcast || podcastId !== String(olib.currentPodcast.id)) return
@@ -95,6 +107,53 @@ Rectangle {
                     horizontalAlignment: Text.AlignHCenter
                 }
 
+                // Notificación de estado (aviso de no logueado o sesión expirada)
+                Rectangle {
+                    Layout.fillWidth: true
+                    implicitHeight: warnCol.implicitHeight + 20
+                    radius: 8
+                    color: Qt.rgba(0.9, 0.45, 0.1, 0.15)
+                    border.color: "#e67e22"
+                    border.width: 1
+
+                    RowLayout {
+                        id: warnCol
+                        anchors.fill: parent
+                        anchors.margins: 12
+                        spacing: 12
+
+                        Text {
+                            text: "⚠️"
+                            font.pixelSize: 20
+                            Layout.alignment: Qt.AlignVCenter
+                        }
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 4
+
+                            Label {
+                                text: olib.loginErrorText !== ""
+                                    ? olib.loginErrorText
+                                    : qsTr("No has iniciado sesión en KutPod")
+                                color: "#e67e22"
+                                font.bold: true
+                                font.pixelSize: 12
+                                wrapMode: Text.WordWrap
+                                Layout.fillWidth: true
+                            }
+                            Label {
+                                text: qsTr("Inicia sesión para sincronizar y publicar episodios en tu instancia remota.")
+                                color: palette.placeholderText
+                                font.pixelSize: 11
+                                wrapMode: Text.WordWrap
+                                Layout.fillWidth: true
+                                visible: olib.loginErrorText === ""
+                            }
+                        }
+                    }
+                }
+
                 Item { Layout.preferredHeight: 8 }
 
                 Label { text: qsTr("URL de la plataforma"); color: palette.text }
@@ -128,7 +187,7 @@ Rectangle {
                     Layout.fillWidth: true
                     color: "#e74c3c"
                     wrapMode: Text.WordWrap
-                    visible: text !== ""
+                    visible: false
                 }
 
                 RowLayout {

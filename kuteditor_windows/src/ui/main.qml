@@ -1554,12 +1554,12 @@ ApplicationWindow {
         id: deClickerDialog
         title: qsTr("Eliminar clics (De-Clicker)")
         width: 380
-        height: 280
+        height: 290
         minimumWidth: 380
-        minimumHeight: 280
+        minimumHeight: 290
         maximumWidth: 380
-        maximumHeight: 280
-        flags: Qt.Window | Qt.WindowStaysOnTopHint
+        maximumHeight: 290
+        flags: Qt.Window
         color: "#1e222b"
         function open() { visible = true; raise() }
         function close() { visible = false }
@@ -1635,40 +1635,52 @@ ApplicationWindow {
                 height: 12
             }
 
-            Button {
-                text: qsTr("Aplicar De-Clicker")
+            RowLayout {
                 width: parent.width
-                height: 38
-                onClicked: {
-                    let sens = 0.5
-                    if (deClickSensCombo.currentIndex === 0) sens = 0.2
-                    else if (deClickSensCombo.currentIndex === 1) sens = 0.5
-                    else if (deClickSensCombo.currentIndex === 2) sens = 0.8
+                spacing: 12
 
-                    let clicks = TrackModel.deClickSelection(
-                        deClickerDialog.trackIndex,
-                        deClickerDialog.startSec,
-                        deClickerDialog.endSec,
-                        deClickThreshSpin.value,
-                        sens
-                    )
-                    
-                    deClickerDialog.close()
-                    infoDialog.message = qsTr("De-Clicker completado: se repararon %1 clics en el rango seleccionado.").arg(clicks)
-                    infoDialog.open()
+                Button {
+                    text: qsTr("Aplicar De-Clicker")
+                    Layout.fillWidth: true
+                    height: 38
+                    onClicked: {
+                        let sens = 0.5
+                        if (deClickSensCombo.currentIndex === 0) sens = 0.2
+                        else if (deClickSensCombo.currentIndex === 1) sens = 0.5
+                        else if (deClickSensCombo.currentIndex === 2) sens = 0.8
+
+                        let clicks = TrackModel.deClickSelection(
+                            deClickerDialog.trackIndex,
+                            deClickerDialog.startSec,
+                            deClickerDialog.endSec,
+                            deClickThreshSpin.value,
+                            sens
+                        )
+                        
+                        deClickerDialog.close()
+                        infoDialog.message = qsTr("De-Clicker completado: se repararon %1 clics en el rango seleccionado.").arg(clicks)
+                        infoDialog.open()
+                    }
+                    background: Rectangle {
+                        color: parent.pressed ? "#1e7e34" : (parent.hovered ? "#218838" : "#28a745")
+                        radius: 4
+                    }
+                    contentItem: Text {
+                        anchors.centerIn: parent
+                        text: parent.text
+                        color: "#ffffff"
+                        font.pixelSize: 12
+                        font.bold: true
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
                 }
-                background: Rectangle {
-                    color: parent.pressed ? "#1e7e34" : (parent.hovered ? "#218838" : "#28a745")
-                    radius: 4
-                }
-                contentItem: Text {
-                    anchors.centerIn: parent
-                    text: parent.text
-                    color: "#ffffff"
-                    font.pixelSize: 12
-                    font.bold: true
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
+
+                Button {
+                    text: qsTr("Cerrar")
+                    implicitWidth: 90
+                    height: 38
+                    onClicked: deClickerDialog.close()
                 }
             }
         }
@@ -3842,8 +3854,8 @@ ApplicationWindow {
         id: noiseReductionDialog
         title: qsTr("Noise Reduction (Avanzado)")
         width: 440
-        height: 620
-        flags: Qt.Window | Qt.WindowStaysOnTopHint
+        height: 640
+        flags: Qt.Window
         color: "#22252a"
         function open() { visible = true; raise() }
         function close() { visible = false }
@@ -3855,9 +3867,20 @@ ApplicationWindow {
             anchors.margins: 20
             spacing: 16
 
-            Label {
-                text: qsTr("Noise Reduction — Spectral Subtraction")
-                color: "#fff"; font.pixelSize: 14; font.bold: true
+            RowLayout {
+                width: parent.width
+                Label {
+                    text: qsTr("Noise Reduction — Spectral Subtraction")
+                    color: "#fff"; font.pixelSize: 14; font.bold: true
+                    Layout.fillWidth: true
+                }
+                Button {
+                    text: "✕"
+                    implicitWidth: 28; implicitHeight: 28
+                    flat: true
+                    palette.buttonText: "#aaaaaa"
+                    onClicked: noiseReductionDialog.close()
+                }
             }
 
             // --- Visualizador del Perfil Capturado ---
@@ -3975,17 +3998,28 @@ ApplicationWindow {
                 }
             }
 
-            Button {
-                text: qsTr("Aplicar Noise Reduction")
+            RowLayout {
                 width: parent.width
-                enabled: noiseReductionDialog.hasProfile
-                onClicked: {
-                    var ok = UndoManager.noiseReduce(
-                        nrTrackCombo.currentIndex, nrClipSpin.value - 1,
-                        nrReductionDial.value, nrSensitivityDial.value)
-                    nrStatus.text = ok ? qsTr("Efecto aplicado correctamente.") : qsTr("Error al aplicar.")
+                spacing: 10
+
+                Button {
+                    text: qsTr("Aplicar Noise Reduction")
+                    Layout.fillWidth: true
+                    enabled: noiseReductionDialog.hasProfile
+                    onClicked: {
+                        var ok = UndoManager.noiseReduce(
+                            nrTrackCombo.currentIndex, nrClipSpin.value - 1,
+                            nrReductionDial.value, nrSensitivityDial.value)
+                        nrStatus.text = ok ? qsTr("Efecto aplicado correctamente.") : qsTr("Error al aplicar.")
+                    }
+                    background: Rectangle { color: parent.enabled ? "#27ae60" : "#444"; radius: 4 }
                 }
-                background: Rectangle { color: parent.enabled ? "#27ae60" : "#444"; radius: 4 }
+
+                Button {
+                    text: qsTr("Cerrar")
+                    implicitWidth: 90
+                    onClicked: noiseReductionDialog.close()
+                }
             }
 
             Label { id: nrStatus; text: ""; color: "#888"; font.pixelSize: 11; anchors.horizontalCenter: parent.horizontalCenter }
@@ -4000,7 +4034,7 @@ ApplicationWindow {
         title: qsTr("Noise Reduction")
         width: 420
         height: 600
-        flags: Qt.Window | Qt.WindowStaysOnTopHint
+        flags: Qt.Window
         color: "#22252a"
         function open() { visible = true; raise() }
         function close() { visible = false }
@@ -4008,23 +4042,20 @@ ApplicationWindow {
         Column {
             anchors.fill: parent
             anchors.margins: 20
-            spacing: 24
+            spacing: 20
 
-            // --- Visualizador Espectral ---
-            SpectralDisplay {
+            // --- Header con título, toggle ON/OFF y botón cerrar ---
+            RowLayout {
                 width: parent.width
-                height: 180
-                active: denoiserToggle.active && denoiserDialog.visible
-                inputMags: AudioEngine.deNoiser.inputMagnitudes
-                outputMags: AudioEngine.deNoiser.outputMagnitudes
-                noiseMags: AudioEngine.deNoiser.noiseMagnitudes
-            }
 
-            // --- Control de estado (ON/OFF) ---
-            Row {
-                width: parent.width
-                layoutDirection: Qt.RightToLeft
-                
+                Label {
+                    text: qsTr("Noise Reduction (Spectral)")
+                    color: "#ffffff"
+                    font.pixelSize: 15
+                    font.bold: true
+                    Layout.fillWidth: true
+                }
+
                 Rectangle {
                     id: denoiserToggle
                     width: 44; height: 22
@@ -4042,12 +4073,31 @@ ApplicationWindow {
 
                     MouseArea {
                         anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
                         onClicked: {
                             denoiserToggle.active = !denoiserToggle.active
                             AudioEngine.deNoiser.setEnabled(denoiserToggle.active)
                         }
                     }
                 }
+
+                Button {
+                    text: "✕"
+                    implicitWidth: 28; implicitHeight: 28
+                    flat: true
+                    palette.buttonText: "#aaaaaa"
+                    onClicked: denoiserDialog.close()
+                }
+            }
+
+            // --- Visualizador Espectral ---
+            SpectralDisplay {
+                width: parent.width
+                height: 180
+                active: denoiserToggle.active && denoiserDialog.visible
+                inputMags: AudioEngine.deNoiser.inputMagnitudes
+                outputMags: AudioEngine.deNoiser.outputMagnitudes
+                noiseMags: AudioEngine.deNoiser.noiseMagnitudes
             }
 
             // --- Diales de Control ---
@@ -4082,9 +4132,19 @@ ApplicationWindow {
 
             Label {
                 text: qsTr("Smoothing: valores altos = más suave. Bajos = más agresivo.")
-                color: "#555"; font.pixelSize: 10
+                color: "#777"; font.pixelSize: 11
                 anchors.horizontalCenter: parent.horizontalCenter
                 horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.WordWrap
+                width: parent.width
+            }
+
+            // --- Botón de cierre en la parte inferior ---
+            Button {
+                text: qsTr("Cerrar")
+                anchors.horizontalCenter: parent.horizontalCenter
+                implicitWidth: 120
+                onClicked: denoiserDialog.close()
             }
         }
     }

@@ -398,6 +398,40 @@ Rectangle {
                         }
                     }
 
+                    // Banner informativo si no está conectado a KutPod
+                    Rectangle {
+                        width: parent.width
+                        implicitHeight: 46
+                        radius: 8
+                        color: Qt.rgba(0.2, 0.5, 0.8, 0.12)
+                        border.color: "#2980b9"
+                        border.width: 1
+                        visible: FeatureKutPod && !KutPod.loggedIn
+
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 14
+                            anchors.rightMargin: 14
+                            spacing: 12
+
+                            Label {
+                                text: "ℹ️  " + qsTr("No has iniciado sesión en KutPod. Conéctate para sincronizar y publicar episodios en tu instancia remota.")
+                                color: root.textPri
+                                font.pixelSize: 12
+                                Layout.fillWidth: true
+                                elide: Text.ElideRight
+                            }
+
+                            Button {
+                                text: qsTr("Iniciar sesión")
+                                flat: true
+                                font.bold: true
+                                palette.buttonText: "#3498db"
+                                onClicked: libTabs.setCurrentIndex(1)
+                            }
+                        }
+                    }
+
                     // Cabecera
                     RowLayout {
                         width: parent.width

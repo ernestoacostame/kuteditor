@@ -163,7 +163,17 @@ QVariantList KutPodClient::readJsonArray(QNetworkReply *r, bool &ok, QString &er
 {
     ok = false;
     const QByteArray raw = r->readAll();
-    if (r->error() != QNetworkReply::NoError) { err = r->errorString(); return {}; }
+    if (r->error() != QNetworkReply::NoError) {
+        err = r->errorString();
+        QJsonParseError je;
+        const auto doc = QJsonDocument::fromJson(raw, &je);
+        if (je.error == QJsonParseError::NoError && doc.isObject()) {
+            const auto o = doc.object();
+            if (o.contains("message")) err = o["message"].toString();
+            else if (o.contains("error")) err = o["error"].toString();
+        }
+        return {};
+    }
     QJsonParseError je;
     const auto doc = QJsonDocument::fromJson(raw, &je);
     if (je.error != QJsonParseError::NoError) {
@@ -264,6 +274,31 @@ void KutPodClient::loadSession()
     s.endGroup();
 }
 
+bool KutPodClient::checkAuthFailure(QNetworkReply *r)
+{
+    if (!r) return false;
+    int status = r->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    if (status == 401 || status == 403 || r->error() == QNetworkReply::AuthenticationRequiredError) {
+        QString msg = tr("Tu sesión en KutPod ha expirado. Por favor, inicia sesión de nuevo.");
+        QByteArray data = r->peek(1024);
+        QJsonParseError je;
+        auto doc = QJsonDocument::fromJson(data, &je);
+        if (je.error == QJsonParseError::NoError && doc.isObject()) {
+            auto obj = doc.object();
+            if (obj.contains("message") && !obj["message"].toString().isEmpty()) {
+                msg = obj["message"].toString();
+            } else if (obj.contains("error") && !obj["error"].toString().isEmpty()) {
+                msg = obj["error"].toString();
+            }
+        }
+        m_lastError = msg;
+        logout();
+        emit sessionExpired(msg);
+        return true;
+    }
+    return false;
+}
+
 // ─────────────────────────────────────────────────────────────────────
 //  Listado de podcasts
 // ─────────────────────────────────────────────────────────────────────
@@ -273,6 +308,11 @@ void KutPodClient::fetchPodcasts()
     setBusy(true);
     QNetworkReply *r = get("/api/podcasts");
     connect(r, &QNetworkReply::finished, this, [this, r]() {
+        if (checkAuthFailure(r)) {
+            r->deleteLater();
+            setBusy(false);
+            return;
+        }
         bool ok; QString err;
         QVariantList items = readJsonArray(r, ok, err);
         r->deleteLater();
@@ -303,6 +343,11 @@ void KutPodClient::fetchEpisodes(const QString &podcastId,
     setBusy(true);
     QNetworkReply *r = get(path);
     connect(r, &QNetworkReply::finished, this, [this, r, podcastId]() {
+        if (checkAuthFailure(r)) {
+            r->deleteLater();
+            setBusy(false);
+            return;
+        }
         const QByteArray raw = r->readAll();
         const auto netErr = r->error();
         r->deleteLater();
@@ -421,6 +466,12 @@ void KutPodClient::publishEpisode(const QString &podcastId, const QVariantMap &d
     });
 
     connect(r, &QNetworkReply::finished, this, [this, r]() {
+        if (checkAuthFailure(r)) {
+            r->deleteLater();
+            setBusy(false);
+            emit publishFinished(false, QString(), tr("Tu sesión en KutPod ha expirado. Por favor, inicia sesión de nuevo."));
+            return;
+        }
         bool ok; QString err;
         const QVariantMap m = readJsonObject(r, ok, err);
         r->deleteLater();
@@ -528,6 +579,12 @@ void KutPodClient::updateEpisode(const QString &podcastId, const QString &episod
     });
 
     connect(r, &QNetworkReply::finished, this, [this, r]() {
+        if (checkAuthFailure(r)) {
+            r->deleteLater();
+            setBusy(false);
+            emit episodeUpdateFinished(false, QString(), tr("Tu sesión en KutPod ha expirado. Por favor, inicia sesión de nuevo."));
+            return;
+        }
         bool ok; QString err;
         const QVariantMap m = readJsonObject(r, ok, err);
         r->deleteLater();

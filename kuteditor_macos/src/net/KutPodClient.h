@@ -115,6 +115,7 @@ public:
 
 signals:
     void sessionChanged();
+    void sessionExpired(QString message);
     void busyChanged();
     void podcastsChanged();
 
@@ -137,6 +138,7 @@ private:
     void setBusy(bool b);
     void saveSession() const;
     void loadSession();
+    bool checkAuthFailure(QNetworkReply *r);
 
     QUrl endpoint(const QString &path) const;
     QNetworkReply *get(const QString &path);
