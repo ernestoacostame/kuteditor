@@ -1,3 +1,12 @@
+kuteditor (2.73-1) unstable; urgency=medium
+
+  * Ventana unificada de Noise Reduction con modos Tiempo Real y Avanzado.
+  * Botones de cerrar en ventanas de efectos (Noise Gate, etc.).
+  * Soporte completo de internacionalización (i18n) en paneles y diálogos.
+  * Manejo de caducidad de sesión y aviso en Biblioteca Online de KutPod.
+
+ -- KutStudio <soporte@kutstudio.com>  Fri, 13 Nov 2026 15:05:00 -0600
+
 kuteditor (2.72-1) unstable; urgency=medium
 
   * Filtrar streams de aplicaciones y listar exclusivamente dispositivos de audio en JACK.
