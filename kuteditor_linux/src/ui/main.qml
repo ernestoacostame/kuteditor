@@ -2277,7 +2277,7 @@ ApplicationWindow {
 
                     Platform.Menu {
                         title: qsTr("Reducción de ruido")
-                        Platform.MenuItem { text: qsTr("Noise Reduction (Spectral)…"); onTriggered: noiseReductionDialog.open() }
+                        Platform.MenuItem { text: qsTr("Noise Reduction (Spectral)…"); onTriggered: denoiserDialog.open() }
                         Platform.MenuItem { text: qsTr("Deep Denoise (AI)…"); onTriggered: deepDenoiseDialog.open() }
                         Platform.MenuItem { text: qsTr("Puerta de ruido…"); onTriggered: noiseGateDialog.open() }
                         Platform.MenuItem { text: qsTr("De-esser…"); onTriggered: deEsserDialog.open() }
@@ -2473,7 +2473,7 @@ ApplicationWindow {
 
             IntegratedMenu {
                 title: qsTr("Reducción de ruido")
-                IntegratedMenuItem { text: qsTr("Noise Reduction (Spectral)…"); onTriggered: noiseReductionDialog.open() }
+                IntegratedMenuItem { text: qsTr("Noise Reduction (Spectral)…"); onTriggered: denoiserDialog.open() }
                 IntegratedMenuItem { text: qsTr("Deep Denoise (AI)…"); onTriggered: deepDenoiseDialog.open() }
                 IntegratedMenuItem { text: qsTr("Puerta de ruido…"); onTriggered: noiseGateDialog.open() }
                 IntegratedMenuItem { text: qsTr("De-esser…"); onTriggered: deEsserDialog.open() }
@@ -4023,217 +4023,95 @@ ApplicationWindow {
     }
 
     // ========================================================================
-    //  Ventana de Noise Reduction (sustracción espectral)
+    //  Ventana Unificada de Noise Reduction (Tiempo Real + Modo Avanzado)
     // ========================================================================
-    Window {
+    QtObject {
         id: noiseReductionDialog
-        title: qsTr("Noise Reduction (Avanzado)")
-        width: 440
-        height: 640
-        flags: Qt.Window
-        color: "#22252a"
-        function open() { visible = true; raise() }
-        function close() { visible = false }
-
-        property bool hasProfile: TrackModel.hasNoiseProfile
-
-        Column {
-            anchors.fill: parent
-            anchors.margins: 20
-            spacing: 16
-
-            RowLayout {
-                width: parent.width
-                Label {
-                    text: qsTr("Noise Reduction — Spectral Subtraction")
-                    color: "#fff"; font.pixelSize: 14; font.bold: true
-                    Layout.fillWidth: true
-                }
-                Button {
-                    text: "✕"
-                    implicitWidth: 28; implicitHeight: 28
-                    flat: true
-                    palette.buttonText: "#aaaaaa"
-                    onClicked: noiseReductionDialog.close()
-                }
-            }
-
-            // --- Visualizador del Perfil Capturado ---
-            SpectralDisplay {
-                width: parent.width
-                height: 140
-                active: noiseReductionDialog.hasProfile
-                // Solo mostramos el ruido capturado ya que es un proceso offline
-                noiseMags: TrackModel.noiseProfileMagnitudes
-                inputMags: []
-                outputMags: []
-                
-                Label {
-                    anchors.centerIn: parent
-                    text: qsTr("Sin perfil capturado")
-                    color: "#555"; font.pixelSize: 12
-                    visible: !noiseReductionDialog.hasProfile
-                }
-            }
-
-            Rectangle { width: parent.width; height: 1; color: "#3c4146" }
-
-            // Paso 1: Captura
-            Label {
-                text: qsTr("Paso 1: Capturar perfil de ruido")
-                color: "#1abc9c"; font.pixelSize: 12; font.bold: true
-            }
-            
-            Grid {
-                columns: 2; spacing: 8; width: parent.width
-                Label { text: qsTr("Pista:"); color: "#888"; verticalAlignment: Text.AlignVCenter; height: 32 }
-                ComboBox {
-                    id: nrTrackCombo; width: parent.width - 60
-                    model: {
-                        var items = []
-                        for (var i = 0; i < TrackModel.count; i++)
-                            items.push(qsTr("Pista %1").arg(i + 1))
-                        return items
-                    }
-                }
-                Label { text: qsTr("Clip:"); color: "#888"; verticalAlignment: Text.AlignVCenter; height: 32 }
-                SpinBox { id: nrClipSpin; from: 1; to: 99; value: 1 }
-            }
-
-            Button {
-                text: qsTr("Obtener perfil de ruido")
-                width: parent.width
-                onClicked: {
-                    TrackModel.noiseProfileCapture(
-                        nrTrackCombo.currentIndex, nrClipSpin.value - 1,
-                        nrFromSpin.value, nrToSpin.value)
-                    nrStatus.text = TrackModel.hasNoiseProfile ? qsTr("Perfil capturado.") : qsTr("Error al capturar.")
-                    nrStatus.color = TrackModel.hasNoiseProfile ? "#2ecc71" : "#e74c3c"
-                }
-                background: Rectangle { color: "#2980b9"; radius: 4 }
-            }
-
-            Row {
-                spacing: 8; width: parent.width
-                Label { text: qsTr("Rango (s):"); color: "#888"; anchors.verticalCenter: parent.verticalCenter }
-                SpinBox { id: nrFromSpin; from: 0; to: 999; value: 0; editable: true }
-                Label { text: "-"; color: "#888"; anchors.verticalCenter: parent.verticalCenter }
-                SpinBox { id: nrToSpin; from: 0; to: 999; value: 0; editable: true }
-            }
-
-            Rectangle { width: parent.width; height: 1; color: "#3c4146" }
-
-            // Paso 2: Aplicar
-            Label {
-                text: qsTr("Paso 2: Parámetros y Aplicación")
-                color: noiseReductionDialog.hasProfile ? "#1abc9c" : "#444"
-                font.pixelSize: 12; font.bold: true
-            }
-
-            Row {
-                width: parent.width; spacing: 30
-                anchors.horizontalCenter: parent.horizontalCenter
-                enabled: noiseReductionDialog.hasProfile
-                opacity: enabled ? 1.0 : 0.3
-
-                Column {
-                    spacing: 4
-                    anchors.verticalCenter: parent.verticalCenter
-                    BigMetalKnob {
-                        id: nrReductionDial
-                        size: 100
-                        from: 0; to: 40
-                        value: 12
-                        activeColor: "#1abc9c"
-                    }
-                    Label {
-                        text: qsTr("Reduction")
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        color: "#aaa"
-                        font.pixelSize: 12
-                    }
-                }
-
-                Column {
-                    spacing: 4
-                    anchors.verticalCenter: parent.verticalCenter
-                    BigMetalKnob {
-                        id: nrSensitivityDial
-                        size: 100
-                        from: 0; to: 24
-                        value: 6
-                        activeColor: "#f39c12"
-                    }
-                    Label {
-                        text: qsTr("Sensitivity")
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        color: "#aaa"
-                        font.pixelSize: 12
-                    }
-                }
-            }
-
-            RowLayout {
-                width: parent.width
-                spacing: 10
-
-                Button {
-                    text: qsTr("Aplicar Noise Reduction")
-                    Layout.fillWidth: true
-                    enabled: noiseReductionDialog.hasProfile
-                    onClicked: {
-                        var ok = UndoManager.noiseReduce(
-                            nrTrackCombo.currentIndex, nrClipSpin.value - 1,
-                            nrReductionDial.value, nrSensitivityDial.value)
-                        nrStatus.text = ok ? qsTr("Efecto aplicado correctamente.") : qsTr("Error al aplicar.")
-                    }
-                    background: Rectangle { color: parent.enabled ? "#27ae60" : "#444"; radius: 4 }
-                }
-
-                Button {
-                    text: qsTr("Cerrar")
-                    implicitWidth: 90
-                    onClicked: noiseReductionDialog.close()
-                }
-            }
-
-            Label { id: nrStatus; text: ""; color: "#888"; font.pixelSize: 11; anchors.horizontalCenter: parent.horizontalCenter }
-        }
+        function open() { denoiserDialog.openAdvanced() }
+        function close() { denoiserDialog.close() }
     }
 
-    // ========================================================================
-    //  Ventana del DeNoiser
-    // ========================================================================
     Window {
         id: denoiserDialog
         title: qsTr("Noise Reduction")
-        width: 420
-        height: 600
+        width: 440
+        height: nrMode === 0 ? 590 : 660
         flags: Qt.Window
         color: "#22252a"
+
+        property int nrMode: 0 // 0: Tiempo Real, 1: Avanzado (Perfil)
+        property bool hasProfile: TrackModel.hasNoiseProfile
+
         function open() { visible = true; raise() }
+        function openAdvanced() { nrMode = 1; open() }
         function close() { visible = false }
 
         Column {
             anchors.fill: parent
-            anchors.margins: 20
-            spacing: 20
+            anchors.margins: 18
+            spacing: 16
 
-            // --- Header con título, toggle ON/OFF y botón cerrar ---
+            // --- Header con título, selector de modo y botón cerrar ---
             RowLayout {
                 width: parent.width
 
                 Label {
-                    text: qsTr("Noise Reduction (Spectral)")
+                    text: qsTr("Noise Reduction")
                     color: "#ffffff"
                     font.pixelSize: 15
                     font.bold: true
-                    Layout.fillWidth: true
                 }
 
+                Item { Layout.fillWidth: true }
+
+                // Selector de modo
+                Row {
+                    spacing: 4
+
+                    Rectangle {
+                        width: 82; height: 26
+                        radius: 4
+                        color: denoiserDialog.nrMode === 0 ? "#2980b9" : "#333"
+                        border.color: denoiserDialog.nrMode === 0 ? "#3498db" : "#444"
+                        Text {
+                            anchors.centerIn: parent
+                            text: qsTr("Tiempo Real")
+                            color: denoiserDialog.nrMode === 0 ? "white" : "#aaa"
+                            font.pixelSize: 11
+                            font.bold: denoiserDialog.nrMode === 0
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: denoiserDialog.nrMode = 0
+                        }
+                    }
+
+                    Rectangle {
+                        width: 76; height: 26
+                        radius: 4
+                        color: denoiserDialog.nrMode === 1 ? "#16a085" : "#333"
+                        border.color: denoiserDialog.nrMode === 1 ? "#1abc9c" : "#444"
+                        Text {
+                            anchors.centerIn: parent
+                            text: qsTr("Avanzado")
+                            color: denoiserDialog.nrMode === 1 ? "white" : "#aaa"
+                            font.pixelSize: 11
+                            font.bold: denoiserDialog.nrMode === 1
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: denoiserDialog.nrMode = 1
+                        }
+                    }
+                }
+
+                // Toggle ON/OFF (activo en modo Tiempo Real)
                 Rectangle {
                     id: denoiserToggle
-                    width: 44; height: 22
+                    visible: denoiserDialog.nrMode === 0
+                    width: 44; height: 24
                     radius: 4
                     property bool active: AudioEngine.deNoiser.enabled
                     color: active ? "#2980b9" : "#333"
@@ -4258,63 +4136,202 @@ ApplicationWindow {
 
                 Button {
                     text: "✕"
-                    implicitWidth: 28; implicitHeight: 28
+                    implicitWidth: 26; implicitHeight: 26
                     flat: true
                     palette.buttonText: "#aaaaaa"
                     onClicked: denoiserDialog.close()
                 }
             }
 
-            // --- Visualizador Espectral ---
-            SpectralDisplay {
+            Rectangle { width: parent.width; height: 1; color: "#3c4146" }
+
+            // ==========================================
+            // MODO 0: Tiempo Real (Streaming DeNoiser)
+            // ==========================================
+            Column {
                 width: parent.width
-                height: 180
-                active: denoiserToggle.active && denoiserDialog.visible
-                inputMags: AudioEngine.deNoiser.inputMagnitudes
-                outputMags: AudioEngine.deNoiser.outputMagnitudes
-                noiseMags: AudioEngine.deNoiser.noiseMagnitudes
-            }
+                spacing: 18
+                visible: denoiserDialog.nrMode === 0
 
-            // --- Diales de Control ---
-            Item {
-                width: parent.width; height: 140
+                SpectralDisplay {
+                    width: parent.width
+                    height: 180
+                    active: denoiserToggle.active && denoiserDialog.visible && denoiserDialog.nrMode === 0
+                    inputMags: AudioEngine.deNoiser.inputMagnitudes
+                    outputMags: AudioEngine.deNoiser.outputMagnitudes
+                    noiseMags: AudioEngine.deNoiser.noiseMagnitudes
+                }
 
-                BigMetalKnob {
-                    id: denoiserReductionDial
-                    size: 120
-                    from: 0; to: 1.0
-                    value: AudioEngine.deNoiser.reduction
-                    activeColor: "#3498db"
-                    anchors.centerIn: parent
-                    onMoved: (val) => AudioEngine.deNoiser.setReduction(val)
-                    
-                    Label {
-                        text: qsTr("Reduction")
-                        anchors.top: denoiserReductionDial.bottom
-                        anchors.topMargin: 8
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        color: "#aaa"
-                        font.pixelSize: 12
+                Item {
+                    width: parent.width; height: 140
+
+                    BigMetalKnob {
+                        id: denoiserReductionDial
+                        size: 120
+                        from: 0; to: 1.0
+                        value: AudioEngine.deNoiser.reduction
+                        activeColor: "#3498db"
+                        anchors.centerIn: parent
+                        onMoved: (val) => AudioEngine.deNoiser.setReduction(val)
+                        
+                        Label {
+                            text: qsTr("Reduction")
+                            anchors.top: denoiserReductionDial.bottom
+                            anchors.topMargin: 8
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            color: "#aaa"
+                            font.pixelSize: 12
+                        }
+                        Label {
+                            anchors.top: parent.top; anchors.topMargin: -16
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            text: parent.value.toFixed(1) + " dB"
+                            color: "#666"; font.pixelSize: 9
+                        }
                     }
-                    Label {
-                        anchors.top: parent.top; anchors.topMargin: -16
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        text: parent.value.toFixed(1) + " dB"
-                        color: "#666"; font.pixelSize: 9
-                    }
+                }
+
+                Label {
+                    text: qsTr("Smoothing: valores altos = más suave. Bajos = más agresivo.")
+                    color: "#777"; font.pixelSize: 11
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    horizontalAlignment: Text.AlignHCenter
+                    wrapMode: Text.WordWrap
+                    width: parent.width
                 }
             }
 
-            Label {
-                text: qsTr("Smoothing: valores altos = más suave. Bajos = más agresivo.")
-                color: "#777"; font.pixelSize: 11
-                anchors.horizontalCenter: parent.horizontalCenter
-                horizontalAlignment: Text.AlignHCenter
-                wrapMode: Text.WordWrap
+            // ==========================================
+            // MODO 1: Avanzado (Sustracción Espectral por Perfil)
+            // ==========================================
+            Column {
                 width: parent.width
+                spacing: 12
+                visible: denoiserDialog.nrMode === 1
+
+                SpectralDisplay {
+                    width: parent.width
+                    height: 130
+                    active: denoiserDialog.hasProfile && denoiserDialog.nrMode === 1
+                    noiseMags: TrackModel.noiseProfileMagnitudes
+                    inputMags: []
+                    outputMags: []
+                    
+                    Label {
+                        anchors.centerIn: parent
+                        text: qsTr("Sin perfil capturado")
+                        color: "#555"; font.pixelSize: 12
+                        visible: !denoiserDialog.hasProfile
+                    }
+                }
+
+                Label {
+                    text: qsTr("Paso 1: Capturar perfil de ruido")
+                    color: "#1abc9c"; font.pixelSize: 12; font.bold: true
+                }
+                
+                Grid {
+                    columns: 2; spacing: 8; width: parent.width
+                    Label { text: qsTr("Pista:"); color: "#888"; verticalAlignment: Text.AlignVCenter; height: 32 }
+                    ComboBox {
+                        id: nrTrackCombo; width: parent.width - 60
+                        model: {
+                            var items = []
+                            for (var i = 0; i < TrackModel.count; i++)
+                                items.push(qsTr("Pista %1").arg(i + 1))
+                            return items
+                        }
+                    }
+                    Label { text: qsTr("Clip:"); color: "#888"; verticalAlignment: Text.AlignVCenter; height: 32 }
+                    SpinBox { id: nrClipSpin; from: 1; to: 99; value: 1 }
+                }
+
+                Row {
+                    spacing: 8; width: parent.width
+                    Label { text: qsTr("Rango (s):"); color: "#888"; anchors.verticalCenter: parent.verticalCenter }
+                    SpinBox { id: nrFromSpin; from: 0; to: 999; value: 0; editable: true }
+                    Label { text: "-"; color: "#888"; anchors.verticalCenter: parent.verticalCenter }
+                    SpinBox { id: nrToSpin; from: 0; to: 999; value: 0; editable: true }
+                    Item { width: 4 }
+                    Button {
+                        text: qsTr("Capturar")
+                        onClicked: {
+                            TrackModel.noiseProfileCapture(
+                                nrTrackCombo.currentIndex, nrClipSpin.value - 1,
+                                nrFromSpin.value, nrToSpin.value)
+                            nrStatus.text = TrackModel.hasNoiseProfile ? qsTr("Perfil capturado.") : qsTr("Error al capturar.")
+                            nrStatus.color = TrackModel.hasNoiseProfile ? "#2ecc71" : "#e74c3c"
+                        }
+                        background: Rectangle { color: "#2980b9"; radius: 4 }
+                    }
+                }
+
+                Rectangle { width: parent.width; height: 1; color: "#3c4146" }
+
+                Label {
+                    text: qsTr("Paso 2: Parámetros y Aplicación")
+                    color: denoiserDialog.hasProfile ? "#1abc9c" : "#444"
+                    font.pixelSize: 12; font.bold: true
+                }
+
+                Row {
+                    width: parent.width; spacing: 30
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    enabled: denoiserDialog.hasProfile
+                    opacity: enabled ? 1.0 : 0.3
+
+                    Column {
+                        spacing: 4
+                        anchors.verticalCenter: parent.verticalCenter
+                        BigMetalKnob {
+                            id: nrReductionDial
+                            size: 90
+                            from: 0; to: 40
+                            value: 12
+                            activeColor: "#1abc9c"
+                        }
+                        Label {
+                            text: qsTr("Reduction")
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            color: "#aaa"; font.pixelSize: 11
+                        }
+                    }
+
+                    Column {
+                        spacing: 4
+                        anchors.verticalCenter: parent.verticalCenter
+                        BigMetalKnob {
+                            id: nrSensitivityDial
+                            size: 90
+                            from: 0; to: 24
+                            value: 6
+                            activeColor: "#f39c12"
+                        }
+                        Label {
+                            text: qsTr("Sensitivity")
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            color: "#aaa"; font.pixelSize: 11
+                        }
+                    }
+                }
+
+                Button {
+                    text: qsTr("Aplicar Noise Reduction")
+                    width: parent.width
+                    enabled: denoiserDialog.hasProfile
+                    onClicked: {
+                        var ok = UndoManager.noiseReduce(
+                            nrTrackCombo.currentIndex, nrClipSpin.value - 1,
+                            nrReductionDial.value, nrSensitivityDial.value)
+                        nrStatus.text = ok ? qsTr("Efecto aplicado correctamente.") : qsTr("Error al aplicar.")
+                    }
+                    background: Rectangle { color: parent.enabled ? "#27ae60" : "#444"; radius: 4 }
+                }
+
+                Label { id: nrStatus; text: ""; color: "#888"; font.pixelSize: 11; anchors.horizontalCenter: parent.horizontalCenter }
             }
 
-            // --- Botón de cierre en la parte inferior ---
+            // --- Botón Cerrar inferior ---
             Button {
                 text: qsTr("Cerrar")
                 anchors.horizontalCenter: parent.horizontalCenter
@@ -4338,6 +4355,7 @@ ApplicationWindow {
             anchors.fill: parent
             anchors.margins: 16
             fx: AudioEngine.noiseGate
+            onCloseRequested: noiseGateDialog.close()
         }
     }
 

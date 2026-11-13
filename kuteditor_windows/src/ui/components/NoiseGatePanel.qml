@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Layouts
 
 /**
  * NoiseGatePanel: Interfaz unificada de Noise Gate (estilo Hindenburg)
@@ -11,17 +12,18 @@ Column {
     width: parent ? parent.width : 300
 
     property var fx: null
+    signal closeRequested()
 
     // === Header + Toggle ===
-    Row {
-        spacing: 10
+    RowLayout {
+        width: parent.width
+
         Label {
             text: qsTr("Puerta de Ruido")
             color: "#fff"; font.bold: true; font.pixelSize: 14
-            anchors.verticalCenter: parent.children[1].verticalCenter
         }
         Button {
-            width: 48; height: 26
+            implicitWidth: 48; implicitHeight: 26
             text: fx && fx.enabled ? "on" : "off"
             onClicked: {
                 if (fx) fx.setEnabled(!fx.enabled)
@@ -39,6 +41,14 @@ Column {
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
             }
+        }
+        Item { Layout.fillWidth: true }
+        Button {
+            text: "✕"
+            implicitWidth: 26; implicitHeight: 26
+            flat: true
+            palette.buttonText: "#aaa"
+            onClicked: gatePanel.closeRequested()
         }
     }
 
@@ -92,5 +102,12 @@ Column {
                 font.bold: true
             }
         }
+    }
+
+    Button {
+        text: qsTr("Cerrar")
+        anchors.horizontalCenter: parent.horizontalCenter
+        implicitWidth: 100
+        onClicked: gatePanel.closeRequested()
     }
 }
