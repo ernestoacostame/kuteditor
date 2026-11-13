@@ -1080,10 +1080,10 @@ Window {
                         Layout.fillWidth: true
                         text: {
                             if (!fx) return ""
-                            if (fx.isReady) return "✓ Modelo IA cargado y listo."
+                            if (fx.isReady) return qsTr("✓ Modelo IA cargado y listo.")
                             if (fx.downloadProgress > 0 && fx.downloadProgress < 1.0)
-                                return "Descargando modelo: " + Math.round(fx.downloadProgress * 100) + "%"
-                            return "⚠ Faltan los pesos del modelo (~20MB)."
+                                return qsTr("Descargando modelo: %1%").arg(Math.round(fx.downloadProgress * 100))
+                            return qsTr("⚠ Faltan los pesos del modelo (~20MB).")
                         }
                         color: fx && fx.isReady ? "#5dade2" : "#d4a017"
                         font.pixelSize: 10; wrapMode: Text.WordWrap

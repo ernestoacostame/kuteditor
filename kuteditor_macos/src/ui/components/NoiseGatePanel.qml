@@ -66,7 +66,7 @@ Column {
         }
         Label {
             anchors.centerIn: parent
-            text: fx && fx.gainReduction < -0.1 ? "CERRADO" : "ABIERTO"
+            text: fx && fx.gainReduction < -0.1 ? qsTr("CERRADO") : qsTr("ABIERTO")
             color: fx && fx.gainReduction < -0.1 ? "#fff" : "#555"
             font.pixelSize: 9; font.family: "monospace"; font.bold: true
         }

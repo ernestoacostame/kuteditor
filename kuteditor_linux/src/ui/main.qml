@@ -4069,11 +4069,13 @@ ApplicationWindow {
                     spacing: 4
 
                     Rectangle {
-                        width: 82; height: 26
+                        implicitWidth: nrRtText.implicitWidth + 24
+                        height: 26
                         radius: 4
                         color: denoiserDialog.nrMode === 0 ? "#2980b9" : "#333"
                         border.color: denoiserDialog.nrMode === 0 ? "#3498db" : "#444"
                         Text {
+                            id: nrRtText
                             anchors.centerIn: parent
                             text: qsTr("Tiempo Real")
                             color: denoiserDialog.nrMode === 0 ? "white" : "#aaa"
@@ -4088,11 +4090,13 @@ ApplicationWindow {
                     }
 
                     Rectangle {
-                        width: 76; height: 26
+                        implicitWidth: nrAdvText.implicitWidth + 24
+                        height: 26
                         radius: 4
                         color: denoiserDialog.nrMode === 1 ? "#16a085" : "#333"
                         border.color: denoiserDialog.nrMode === 1 ? "#1abc9c" : "#444"
                         Text {
+                            id: nrAdvText
                             anchors.centerIn: parent
                             text: qsTr("Avanzado")
                             color: denoiserDialog.nrMode === 1 ? "white" : "#aaa"
@@ -4419,10 +4423,10 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         text: {
                             if (!deepDenoiseDialog.dfx) return ""
-                            if (deepDenoiseDialog.dfx.isReady) return "✓ Modelo IA cargado y listo."
+                            if (deepDenoiseDialog.dfx.isReady) return qsTr("✓ Modelo IA cargado y listo.")
                             if (deepDenoiseDialog.dfx.downloadProgress > 0 && deepDenoiseDialog.dfx.downloadProgress < 1.0)
-                                return "Descargando modelo: " + Math.round(deepDenoiseDialog.dfx.downloadProgress * 100) + "%"
-                            return "⚠ Faltan los pesos del modelo (~20MB)."
+                                return qsTr("Descargando modelo: %1%").arg(Math.round(deepDenoiseDialog.dfx.downloadProgress * 100))
+                            return qsTr("⚠ Faltan los pesos del modelo (~20MB).")
                         }
                         color: deepDenoiseDialog.dfx && deepDenoiseDialog.dfx.isReady ? "#5dade2" : "#d4a017"
                         font.pixelSize: 10; wrapMode: Text.WordWrap
@@ -4430,7 +4434,7 @@ ApplicationWindow {
                     }
                     
                     Button {
-                        text: "Descargar"
+                        text: qsTr("Descargar")
                         visible: deepDenoiseDialog.dfx && !deepDenoiseDialog.dfx.isReady && deepDenoiseDialog.dfx.downloadProgress === 0
                         onClicked: { if(deepDenoiseDialog.dfx) deepDenoiseDialog.dfx.retryDownload() }
                         background: Rectangle { color: parent.pressed ? "#7a5a00" : "#5a4200"; radius: 3; border.color: "#d4a017"; border.width: 1 }
