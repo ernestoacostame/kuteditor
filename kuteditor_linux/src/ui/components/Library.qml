@@ -480,8 +480,8 @@ Rectangle {
 
                                         Image {
                                             anchors.fill: parent
-                                            source: modelData.hasCover
-                                                ? "file://" + modelData.coverPath + "?v=" + lib.podcastListRevision
+                                            source: (modelData.hasCover && modelData.coverPath)
+                                                ? (FileHelper.pathToUrl(modelData.coverPath) + "?v=" + lib.podcastListRevision)
                                                 : ""
                                             sourceSize: Qt.size(200, 200)
                                             asynchronous: true
@@ -606,11 +606,7 @@ Rectangle {
                 title: qsTr("Seleccionar portada")
                 nameFilters: ["Imágenes (*.jpg *.jpeg *.png *.webp)"]
                 onAccepted: {
-                    let src = selectedFile.toString()
-                    if (src.startsWith("file:///"))
-                        src = src.substring(7)
-                    else if (src.startsWith("file://"))
-                        src = src.substring(6)
+                    let src = FileHelper.urlToLocalFile(selectedFile.toString())
 
                     if (lib.currentPodcast && src !== "") {
                         const ext = src.substring(src.lastIndexOf(".")).toLowerCase()
@@ -684,7 +680,7 @@ Rectangle {
                                     anchors.fill: parent
                                     anchors.margins: 1
                                     source: (coverRevision >= 0 && lib.currentPodcast && lib.currentPodcast.hasCover)
-                                        ? ("file://" + lib.currentPodcast.coverPath + "?v=" + coverRevision)
+                                        ? (FileHelper.pathToUrl(lib.currentPodcast.coverPath) + "?v=" + coverRevision)
                                         : ""
                                     sourceSize: Qt.size(300, 300)
                                     asynchronous: false

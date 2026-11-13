@@ -958,9 +958,7 @@ ApplicationWindow {
                         title: qsTr("Seleccionar portada del episodio")
                         nameFilters: [qsTr("Imágenes (*.jpg *.jpeg *.png *.webp)")]
                         onAccepted: {
-                            var p = selectedFile.toString()
-                            if (p.startsWith("file://")) p = p.substring(7)
-                            pubWin.customEpisodeCoverPath = p
+                            pubWin.customEpisodeCoverPath = FileHelper.urlToLocalFile(selectedFile.toString())
                         }
                     }
 
@@ -968,9 +966,7 @@ ApplicationWindow {
                         id: transcriptPicker
                         nameFilters: ["Subtítulos (*.srt *.vtt)"]
                         onAccepted: {
-                            var p = selectedFile.toString()
-                            if (p.startsWith("file://")) p = p.substring(7)
-                            pubWin.transcriptPath = p
+                            pubWin.transcriptPath = FileHelper.urlToLocalFile(selectedFile.toString())
                         }
                     }
                 }

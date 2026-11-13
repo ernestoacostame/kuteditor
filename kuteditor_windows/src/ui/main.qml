@@ -1227,6 +1227,7 @@ ApplicationWindow {
         } else {
             ProjectIO.newProject()
             UndoManager.clear()
+            root.showLibrary = false
         }
     }
     function handleOpenProject() {
@@ -1276,16 +1277,17 @@ ApplicationWindow {
         title: qsTr("Abrir proyecto")
         fileMode: FileDialog.OpenFile
         currentFolder: root.prefProjectsDir !== ""
-                       ? "file://" + root.prefProjectsDir
+                       ? FileHelper.pathToUrl(root.prefProjectsDir)
                        : StandardPaths.writableLocation(StandardPaths.DocumentsLocation)
         nameFilters: [ qsTr("Proyectos Kut (*.kutproj)") ]
         onAccepted: {
-            const path = selectedFile.toString().replace(/^file:\/\//, "")
+            const path = FileHelper.urlToLocalFile(selectedFile.toString())
             if (!ProjectIO.open(path)) {
                 errorDialog.message = ProjectIO.lastError()
                 errorDialog.open()
             } else {
                 UndoManager.clear()
+                root.showLibrary = false
             }
         }
     }
@@ -1295,11 +1297,11 @@ ApplicationWindow {
         fileMode: FileDialog.SaveFile
         defaultSuffix: "kutproj"
         currentFolder: root.prefProjectsDir !== ""
-                       ? "file://" + root.prefProjectsDir
+                       ? FileHelper.pathToUrl(root.prefProjectsDir)
                        : StandardPaths.writableLocation(StandardPaths.DocumentsLocation)
         nameFilters: [ qsTr("Proyectos Kut (*.kutproj)") ]
         onAccepted: {
-            let path = selectedFile.toString().replace(/^file:\/\//, "")
+            let path = FileHelper.urlToLocalFile(selectedFile.toString())
             if (!path.endsWith(".kutproj")) path += ".kutproj"
             if (!ProjectIO.save(path)) {
                 errorDialog.message = ProjectIO.lastError()
@@ -1308,6 +1310,20 @@ ApplicationWindow {
             } else if (root._quitAfterSave) {
                 root._quitAfterSave = false
                 root._doForceQuit()
+            } else {
+                if (confirmDiscardDialog.pendingAction === "new") {
+                    ProjectIO.newProject()
+                    UndoManager.clear()
+                    root.showLibrary = false
+                    confirmDiscardDialog.pendingAction = ""
+                } else if (confirmDiscardDialog.pendingAction === "open") {
+                    confirmDiscardDialog.pendingAction = ""
+                    openFileDialog.open()
+                } else if (confirmDiscardDialog.pendingAction === "library") {
+                    confirmDiscardDialog.pendingAction = ""
+                    root.showLibrary = true
+                    libraryView.refreshPodcasts()
+                }
             }
         }
         onRejected: {
@@ -1345,7 +1361,7 @@ ApplicationWindow {
         nameFilters: ["JSON (*.json)"]
         defaultSuffix: "json"
         onAccepted: {
-            var path = selectedFile.toString().replace(/^file:\/\//, "")
+            var path = FileHelper.urlToLocalFile(selectedFile.toString())
             var chapters = ChapterModel.toJson(true)
             var wrapper = { "version": "1.2.0", "chapters": chapters }
             var jsonStr = JSON.stringify(wrapper, null, 2)
@@ -1377,6 +1393,7 @@ ApplicationWindow {
                 ProjectIO.save()
                 if (pendingAction === "new") {
                     ProjectIO.newProject(); UndoManager.clear()
+                    root.showLibrary = false
                 } else if (pendingAction === "open") {
                     openFileDialog.open()
                 } else if (pendingAction === "library") {
@@ -1389,6 +1406,7 @@ ApplicationWindow {
         onDiscarded: {
             if (pendingAction === "new") {
                 ProjectIO.newProject(); UndoManager.clear()
+                root.showLibrary = false
             } else if (pendingAction === "open") {
                 openFileDialog.open()
             } else if (pendingAction === "library") {
@@ -2165,7 +2183,7 @@ ApplicationWindow {
         id: prefProjectsDirDlg
         title: qsTr("Carpeta por defecto para proyectos")
         onAccepted: {
-            root.prefProjectsDir = selectedFolder.toString().replace(/^file:\/\//, "")
+            root.prefProjectsDir = FileHelper.urlToLocalFile(selectedFolder.toString())
         }
     }
 

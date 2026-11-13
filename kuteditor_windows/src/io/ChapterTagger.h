@@ -215,9 +215,17 @@ private:
                              const QString &artworkPath)
     {
         // Resolver ruta (puede venir con "file://" o sin él)
-        QString path = artworkPath;
-        if (path.startsWith("file://"))
-            path = path.mid(7);
+        QString path = artworkPath.trimmed();
+        if (path.startsWith(QLatin1String("file://"), Qt::CaseInsensitive)) {
+            path = QUrl(path).toLocalFile();
+        } else {
+            path = QUrl::fromPercentEncoding(path.toUtf8());
+        }
+#if defined(Q_OS_WIN)
+        if (path.size() >= 3 && path.startsWith(QLatin1Char('/')) && path.at(1).isLetter() && path.at(2) == QLatin1Char(':')) {
+            path = path.mid(1);
+        }
+#endif
 
         QFile imgFile(path);
         if (!imgFile.exists() || !imgFile.open(QIODevice::ReadOnly)) {

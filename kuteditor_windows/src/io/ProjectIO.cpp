@@ -22,10 +22,18 @@
 #endif
 
 static QString resolveProjectPath(const QString &path) {
-    if (path.startsWith("file://")) {
-        return QUrl(path).toLocalFile();
+    QString p = path.trimmed();
+    if (p.startsWith(QLatin1String("file://"), Qt::CaseInsensitive)) {
+        p = QUrl(p).toLocalFile();
+    } else {
+        p = QUrl::fromPercentEncoding(p.toUtf8());
     }
-    return QUrl::fromPercentEncoding(path.toUtf8());
+#if defined(Q_OS_WIN)
+    if (p.size() >= 3 && p.startsWith(QLatin1Char('/')) && p.at(1).isLetter() && p.at(2) == QLatin1Char(':')) {
+        p = p.mid(1);
+    }
+#endif
+    return p;
 }
 
 // ============================================================================

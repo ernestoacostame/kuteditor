@@ -1159,6 +1159,7 @@ ApplicationWindow {
         } else {
             ProjectIO.newProject()
             UndoManager.clear()
+            root.showLibrary = false
         }
     }
     function handleOpenProject() {
@@ -1218,6 +1219,7 @@ ApplicationWindow {
                     errorDialog.open()
                 } else {
                     UndoManager.clear()
+                    root.showLibrary = false
                 }
             }
         }
@@ -1246,6 +1248,20 @@ ApplicationWindow {
                 } else if (root._quitAfterSave) {
                     root._quitAfterSave = false
                     root._doForceQuit()
+                } else {
+                    if (confirmDiscardDialog.pendingAction === "new") {
+                        ProjectIO.newProject()
+                        UndoManager.clear()
+                        root.showLibrary = false
+                        confirmDiscardDialog.pendingAction = ""
+                    } else if (confirmDiscardDialog.pendingAction === "open") {
+                        confirmDiscardDialog.pendingAction = ""
+                        openFileDialog.open()
+                    } else if (confirmDiscardDialog.pendingAction === "library") {
+                        confirmDiscardDialog.pendingAction = ""
+                        root.showLibrary = true
+                        libraryView.refreshPodcasts()
+                    }
                 }
             } else {
                 root._quitAfterSave = false
@@ -1321,6 +1337,7 @@ ApplicationWindow {
                 ProjectIO.save()
                 if (pendingAction === "new") {
                     ProjectIO.newProject(); UndoManager.clear()
+                    root.showLibrary = false
                 } else if (pendingAction === "open") {
                     openFileDialog.open()
                 } else if (pendingAction === "library") {
@@ -1333,6 +1350,7 @@ ApplicationWindow {
         onDiscarded: {
             if (pendingAction === "new") {
                 ProjectIO.newProject(); UndoManager.clear()
+                root.showLibrary = false
             } else if (pendingAction === "open") {
                 openFileDialog.open()
             } else if (pendingAction === "library") {
@@ -2109,7 +2127,7 @@ ApplicationWindow {
         id: prefProjectsDirDlg
         title: qsTr("Carpeta por defecto para proyectos")
         onAccepted: {
-            root.prefProjectsDir = selectedFolder.toString().replace(/^file:\/\//, "")
+            root.prefProjectsDir = FileHelper.urlToLocalFile(selectedFolder.toString())
         }
     }
 

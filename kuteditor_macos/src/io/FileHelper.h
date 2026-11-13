@@ -23,13 +23,40 @@ public:
 
 private:
     QString resolvePath(const QString &path) const {
-        if (path.startsWith("file://")) {
-            return QUrl(path).toLocalFile();
+        QString p = path.trimmed();
+        if (p.startsWith(QLatin1String("file:///"), Qt::CaseInsensitive)) {
+            p = QUrl(p).toLocalFile();
+            if (p.isEmpty()) {
+                p = path.trimmed().mid(8);
+            }
+        } else if (p.startsWith(QLatin1String("file://"), Qt::CaseInsensitive)) {
+            p = p.mid(7);
+#if defined(Q_OS_WIN)
+            if (p.startsWith(QLatin1Char('/'))) p = p.mid(1);
+#endif
+            p = QUrl::fromPercentEncoding(p.toUtf8());
+        } else {
+            p = QUrl::fromPercentEncoding(p.toUtf8());
         }
-        return QUrl::fromPercentEncoding(path.toUtf8());
+#if defined(Q_OS_WIN)
+        if (p.size() >= 3 && p.startsWith(QLatin1Char('/')) && p.at(1).isLetter() && p.at(2) == QLatin1Char(':')) {
+            p = p.mid(1);
+        }
+#endif
+        return p;
     }
 
 public:
+    Q_INVOKABLE QString urlToLocalFile(const QString &urlOrPath) const {
+        return resolvePath(urlOrPath);
+    }
+
+    Q_INVOKABLE QString pathToUrl(const QString &path) const {
+        QString local = resolvePath(path);
+        if (local.isEmpty()) return QString();
+        return QUrl::fromLocalFile(local).toString();
+    }
+
     Q_INVOKABLE bool exists(const QString &path) const {
         return QFileInfo::exists(resolvePath(path));
     }
@@ -122,7 +149,7 @@ public:
         QDir parent = dir;
         parent.cdUp();
         return parent.rename(QFileInfo(resolvedOld).fileName(), newName);
-     }
+    }
 
     Q_INVOKABLE QString getOpenFileName(const QString &title, const QString &dir, const QString &filter) const {
         qDebug() << "[C++ FileDialog] getOpenFileName called with title:" << title << "dir:" << dir << "filter:" << filter;

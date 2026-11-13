@@ -520,9 +520,7 @@ Dialog {
                         title: qsTr("Seleccionar portada del episodio")
                         nameFilters: [qsTr("Imágenes (*.jpg *.jpeg *.png *.webp)")]
                         onAccepted: {
-                            var p = selectedFile.toString()
-                            if (p.startsWith("file://")) p = p.substring(7)
-                            pubDlg.customEpisodeCoverPath = p
+                            pubDlg.customEpisodeCoverPath = FileHelper.urlToLocalFile(selectedFile.toString())
                         }
                     }
 
@@ -530,9 +528,7 @@ Dialog {
                         id: transcriptPicker
                         nameFilters: ["Subtítulos (*.srt *.vtt)"]
                         onAccepted: {
-                            var p = selectedFile.toString()
-                            if (p.startsWith("file://")) p = p.substring(7)
-                            pubDlg.transcriptPath = p
+                            pubDlg.transcriptPath = FileHelper.urlToLocalFile(selectedFile.toString())
                         }
                     }
                 }
