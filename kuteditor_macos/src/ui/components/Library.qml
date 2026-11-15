@@ -357,6 +357,8 @@ Rectangle {
                 anchors.fill: parent
                 anchors.margins: 20
                 clip: true
+                contentWidth: availableWidth
+                ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
 
                 Column {
                     width: parent.width
@@ -365,12 +367,14 @@ Rectangle {
                     // Banner de recuperación pendiente si existe una sesión previa no guardada
                     Rectangle {
                         width: parent.width
-                        height: 52
+                        implicitHeight: Math.max(52, recBannerRow.implicitHeight + 16)
+                        height: implicitHeight
                         radius: 8
                         color: "#d35400"
                         visible: ProjectIO.hasRecoveryProject
 
                         RowLayout {
+                            id: recBannerRow
                             anchors.fill: parent
                             anchors.leftMargin: 16
                             anchors.rightMargin: 16
@@ -386,6 +390,7 @@ Rectangle {
 
                             Button {
                                 text: qsTr("Recuperar audio")
+                                leftPadding: 14; rightPadding: 14; topPadding: 6; bottomPadding: 6
                                 palette.buttonText: "#d35400"
                                 palette.button: "#ffffff"
                                 onClicked: confirmRecoverDialog.open()
@@ -394,6 +399,7 @@ Rectangle {
                             Button {
                                 text: qsTr("Descartar copia")
                                 flat: true
+                                leftPadding: 14; rightPadding: 14; topPadding: 6; bottomPadding: 6
                                 palette.buttonText: "#f1c40f"
                                 onClicked: confirmDiscardDialog.open()
                             }
@@ -403,7 +409,7 @@ Rectangle {
                     // Banner informativo si no está conectado a KutPod
                     Rectangle {
                         width: parent.width
-                        implicitHeight: 46
+                        implicitHeight: Math.max(46, loginBannerRow.implicitHeight + 14)
                         radius: 8
                         color: Qt.rgba(0.2, 0.5, 0.8, 0.12)
                         border.color: "#2980b9"
@@ -411,6 +417,7 @@ Rectangle {
                         visible: FeatureKutPod && !KutPod.loggedIn
 
                         RowLayout {
+                            id: loginBannerRow
                             anchors.fill: parent
                             anchors.leftMargin: 14
                             anchors.rightMargin: 14
@@ -428,6 +435,7 @@ Rectangle {
                                 text: qsTr("Iniciar sesión")
                                 flat: true
                                 font.bold: true
+                                leftPadding: 14; rightPadding: 14; topPadding: 6; bottomPadding: 6
                                 palette.buttonText: "#3498db"
                                 onClicked: libTabs.setCurrentIndex(1)
                             }
@@ -446,6 +454,7 @@ Rectangle {
                         }
                         Button {
                             text: "+ " + qsTr("Nuevo podcast")
+                            leftPadding: 16; rightPadding: 16; topPadding: 7; bottomPadding: 7
                             onClicked: newPodcastDialog.open()
                         }
                     }
@@ -589,6 +598,7 @@ Rectangle {
                         Button {
                             anchors.horizontalCenter: parent.horizontalCenter
                             text: qsTr("Ir al editor (no mostrar esta pantalla de nuevo)")
+                            leftPadding: 16; rightPadding: 16; topPadding: 7; bottomPadding: 7
                             onClicked: lib.skipLibrary()
                         }
                     }
@@ -641,9 +651,10 @@ Rectangle {
             ScrollView {
                 anchors.fill: parent
                 clip: true
+                ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
 
                 Flickable {
-                    contentWidth: parent.width
+                    contentWidth: width
                     contentHeight: epContent.height + 40
 
                     Column {
@@ -656,6 +667,7 @@ Rectangle {
                         // Botón volver
                         Button {
                             text: "← " + qsTr("Volver")
+                            leftPadding: 14; rightPadding: 14; topPadding: 6; bottomPadding: 6
                             onClicked: {
                                 lib.currentPodcast = null
                                 lib.refreshPodcasts()
@@ -784,7 +796,8 @@ Rectangle {
                                 Item { width: 1; height: 4 }
 
                                 Button {
-                                    text: "+ " + qsTr("Nuevo episodio")
+                                    text: qsTr("Nuevo episodio")
+                                    leftPadding: 16; rightPadding: 16; topPadding: 7; bottomPadding: 7
                                     onClicked: newEpisodeDialog.open()
                                 }
 
@@ -867,6 +880,7 @@ Rectangle {
 
                                         Button {
                                             text: qsTr("Abrir")
+                                            leftPadding: 14; rightPadding: 14; topPadding: 6; bottomPadding: 6
                                             onClicked: lib.openEpisode(modelData.path)
                                         }
 
@@ -911,7 +925,7 @@ Rectangle {
                         // Mensaje si no hay episodios
                         Label {
                             visible: lib.episodes.length === 0
-                            text: qsTr("No hay episodios en este podcast.\nCrea uno con el botón «+ Nuevo episodio».")
+                            text: qsTr("No hay episodios en este podcast.\nCrea uno con el botón «Nuevo episodio».")
                             color: root.textSec
                             font.pixelSize: 14
                             horizontalAlignment: Text.AlignHCenter
@@ -970,6 +984,7 @@ Rectangle {
                 anchors.rightMargin: 16
                 Button {
                     text: qsTr("Crear")
+                    leftPadding: 14; rightPadding: 14; topPadding: 6; bottomPadding: 6
                     onClicked: {
                         if (newPodcastName.text.trim() !== "") {
                             lib.createPodcast(newPodcastName.text.trim(), newPodcastAuthor.text.trim())
@@ -981,6 +996,7 @@ Rectangle {
                 }
                 Button {
                     text: qsTr("Cancelar")
+                    leftPadding: 14; rightPadding: 14; topPadding: 6; bottomPadding: 6
                     onClicked: newPodcastDialog.close()
                 }
             }
@@ -1030,6 +1046,7 @@ Rectangle {
                 anchors.rightMargin: 16
                 Button {
                     text: qsTr("Crear")
+                    leftPadding: 14; rightPadding: 14; topPadding: 6; bottomPadding: 6
                     onClicked: {
                         if (newEpisodeName.text.trim() !== "") {
                             lib.createEpisode(newEpisodeName.text.trim())
@@ -1040,6 +1057,7 @@ Rectangle {
                 }
                 Button {
                     text: qsTr("Cancelar")
+                    leftPadding: 14; rightPadding: 14; topPadding: 6; bottomPadding: 6
                     onClicked: newEpisodeDialog.close()
                 }
             }
@@ -1084,6 +1102,7 @@ Rectangle {
                 anchors.rightMargin: 16
                 Button {
                     text: qsTr("Sí, eliminar")
+                    leftPadding: 14; rightPadding: 14; topPadding: 6; bottomPadding: 6
                     onClicked: {
                         if (deletePodcastDialog.podcastToDelete) {
                             FileHelper.removeDir(deletePodcastDialog.podcastToDelete.path)
@@ -1096,6 +1115,7 @@ Rectangle {
                 }
                 Button {
                     text: qsTr("No, cancelar")
+                    leftPadding: 14; rightPadding: 14; topPadding: 6; bottomPadding: 6
                     onClicked: deletePodcastDialog.close()
                 }
             }
@@ -1140,6 +1160,7 @@ Rectangle {
                 anchors.rightMargin: 16
                 Button {
                     text: qsTr("Sí, eliminar")
+                    leftPadding: 14; rightPadding: 14; topPadding: 6; bottomPadding: 6
                     palette.buttonText: "white"
                     palette.button: "#c0392b"
                     onClicked: {
@@ -1155,6 +1176,7 @@ Rectangle {
                 }
                 Button {
                     text: qsTr("No, cancelar")
+                    leftPadding: 14; rightPadding: 14; topPadding: 6; bottomPadding: 6
                     onClicked: deleteEpisodeDialog.close()
                 }
             }
@@ -1203,6 +1225,7 @@ Rectangle {
                 anchors.rightMargin: 16
                 Button {
                     text: qsTr("Renombrar")
+                    leftPadding: 14; rightPadding: 14; topPadding: 6; bottomPadding: 6
                     onClicked: {
                         if (renameEpisodeField.text.trim() !== "" && renameEpisodeDialog.episodeToRename) {
                             lib.renameEpisode(renameEpisodeDialog.episodeToRename, renameEpisodeField.text.trim())
@@ -1212,6 +1235,7 @@ Rectangle {
                 }
                 Button {
                     text: qsTr("Cancelar")
+                    leftPadding: 14; rightPadding: 14; topPadding: 6; bottomPadding: 6
                     onClicked: renameEpisodeDialog.close()
                 }
             }
@@ -1252,6 +1276,7 @@ Rectangle {
                 anchors.rightMargin: 16
                 Button {
                     text: qsTr("Sí, recuperar")
+                    leftPadding: 14; rightPadding: 14; topPadding: 6; bottomPadding: 6
                     onClicked: {
                         confirmRecoverDialog.close()
                         lib.recoverSessionRequested()
@@ -1259,6 +1284,7 @@ Rectangle {
                 }
                 Button {
                     text: qsTr("Cancelar")
+                    leftPadding: 14; rightPadding: 14; topPadding: 6; bottomPadding: 6
                     onClicked: confirmRecoverDialog.close()
                 }
             }
@@ -1299,6 +1325,7 @@ Rectangle {
                 anchors.rightMargin: 16
                 Button {
                     text: qsTr("Sí, descartar")
+                    leftPadding: 14; rightPadding: 14; topPadding: 6; bottomPadding: 6
                     palette.buttonText: "white"
                     palette.button: "#c0392b"
                     onClicked: {
@@ -1308,6 +1335,7 @@ Rectangle {
                 }
                 Button {
                     text: qsTr("Cancelar")
+                    leftPadding: 14; rightPadding: 14; topPadding: 6; bottomPadding: 6
                     onClicked: confirmDiscardDialog.close()
                 }
             }

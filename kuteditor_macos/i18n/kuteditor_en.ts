@@ -549,9 +549,9 @@ episode number and season from the last exported episode.</translation>
     <message>
         <location filename="../src/ui/components/Library.qml" line="871" />
         <source>No hay episodios en este podcast.
-Crea uno con el botón «+ Nuevo episodio».</source>
+Crea uno con el botón «Nuevo episodio».</source>
         <translation>There are no episodes in this podcast.
-Create one with the «+ New episode» button.</translation>
+Create one with the «New episode» button.</translation>
     </message>
     <message>
         <location filename="../src/ui/components/Library.qml" line="578" />

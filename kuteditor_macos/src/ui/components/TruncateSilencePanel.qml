@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Layouts
 
 /**
  * TruncateSilencePanel: Interfaz unificada de Truncar Silencio
@@ -23,17 +24,31 @@ Column {
 
     // Advertencia + Procesar
     Rectangle {
-        width:parent.width; height:36; color:"#241e10"; radius:4; border.color:"#5a3e10"
-        Row {
+        width: parent.width
+        implicitHeight: Math.max(40, silenceWarnRow.implicitHeight + 16)
+        height: implicitHeight
+        color: "#241e10"; radius: 4; border.color: "#5a3e10"
+        RowLayout {
+            id: silenceWarnRow
             anchors.fill: parent
             anchors.margins: 8
             spacing: 8
-            Label { text: qsTr("⚠  Elimina silencios del clip. Configura y pulsa Procesar."); color:"#d4a017"; font.pixelSize:10; wrapMode:Text.WordWrap; width:parent.width - procBtn.width - 16; anchors.verticalCenter:procBtn.verticalCenter }
+            Label {
+                Layout.fillWidth: true
+                text: qsTr("⚠  Elimina silencios del clip. Configura y pulsa Procesar.")
+                color: "#d4a017"; font.pixelSize: 10; wrapMode: Text.WordWrap
+                verticalAlignment: Text.AlignVCenter
+            }
             Button {
-                id:procBtn; text: qsTr("Procesar"); width:80; height:24
+                id: procBtn
+                text: qsTr("Procesar")
+                leftPadding: 12; rightPadding: 12; topPadding: 5; bottomPadding: 5
                 onClicked: silencePanel.applyRequested(silencePanel.thresholdDb, silencePanel.minSilenceMs, silencePanel.maxSilenceMs)
-                background: Rectangle { color:parent.pressed?"#7a5a00":"#5a4200"; radius:3; border.color:"#d4a017"; border.width:1 }
-                contentItem: Label { anchors.centerIn: parent; text:parent.text; color:"#f0c040"; font.pixelSize:10; font.bold:true; horizontalAlignment:Text.AlignHCenter; verticalAlignment:Text.AlignVCenter }
+                background: Rectangle { color: parent.pressed ? "#7a5a00" : "#5a4200"; radius: 3; border.color: "#d4a017"; border.width: 1 }
+                contentItem: Label {
+                    text: parent.text; color: "#f0c040"; font.pixelSize: 10; font.bold: true
+                    horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
+                }
             }
         }
     }

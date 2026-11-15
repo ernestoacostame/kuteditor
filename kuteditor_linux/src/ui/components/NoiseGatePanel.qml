@@ -108,6 +108,7 @@ Column {
         text: qsTr("Cerrar")
         anchors.horizontalCenter: parent.horizontalCenter
         implicitWidth: 100
+        leftPadding: 14; rightPadding: 14; topPadding: 6; bottomPadding: 6
         onClicked: gatePanel.closeRequested()
     }
 }

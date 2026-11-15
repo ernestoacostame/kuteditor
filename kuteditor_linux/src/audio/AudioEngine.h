@@ -218,6 +218,9 @@ private:
     // --- Playback ---
     mutable QMutex m_playbackMutex;
     std::atomic<qint64> m_playheadFrame{0};
+    std::atomic<qint64> m_mixStartFrame{0};
+    std::atomic<qint64> m_mixEndFrame{0};
+    std::atomic<qint64> m_mixCallbackNs{0};
     std::atomic<qint64> m_loopStartFrame{-1};
     std::atomic<qint64> m_loopEndFrame{-1};
     float  m_playbackRate   = 1.0f;

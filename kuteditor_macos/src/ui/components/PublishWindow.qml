@@ -463,12 +463,13 @@ ApplicationWindow {
                 Item { Layout.fillHeight: true }
                 RowLayout {
                     Layout.fillWidth: true
-                    Button { text: qsTr("Cancelar"); onClicked: pubWin.close() }
+                    Button { text: qsTr("Cancelar"); leftPadding: 14; rightPadding: 14; topPadding: 6; bottomPadding: 6; onClicked: pubWin.close() }
                     Item { Layout.fillWidth: true }
                     BusyIndicator { running: KutPod.busy; visible: KutPod.busy }
                     Button {
                         text: qsTr("Iniciar sesión")
                         highlighted: true
+                        leftPadding: 16; rightPadding: 16; topPadding: 7; bottomPadding: 7
                         enabled: !KutPod.busy && lu.text.length > 4
                               && lus.text.length > 0 && lp.text.length > 0
                         onClicked: {
@@ -551,6 +552,7 @@ ApplicationWindow {
                         }
                         Button {
                             text: qsTr("Cambiar…")
+                            leftPadding: 14; rightPadding: 14; topPadding: 6; bottomPadding: 6
                             onClicked: podcastPopup.open()
                         }
                     }
@@ -860,10 +862,12 @@ ApplicationWindow {
                                             text: pubWin.customEpisodeCoverPath === ""
                                                 ? qsTr("Seleccionar portada…")
                                                 : qsTr("Cambiar portada…")
+                                            leftPadding: 12; rightPadding: 12; topPadding: 6; bottomPadding: 6
                                             onClicked: customCoverPicker.open()
                                         }
                                         Button {
                                             text: qsTr("Quitar")
+                                            leftPadding: 12; rightPadding: 12; topPadding: 6; bottomPadding: 6
                                             visible: pubWin.customEpisodeCoverPath !== ""
                                             onClicked: pubWin.customEpisodeCoverPath = ""
                                         }
@@ -945,6 +949,7 @@ ApplicationWindow {
                                 text: pubWin.transcriptPath === ""
                                     ? qsTr("Adjuntar transcripción…")
                                     : qsTr("Cambiar transcripción…")
+                                leftPadding: 14; rightPadding: 14; topPadding: 6; bottomPadding: 6
                                 onClicked: transcriptPicker.open()
                             }
                         }
@@ -1034,6 +1039,7 @@ ApplicationWindow {
                 Button {
                     Layout.alignment: Qt.AlignHCenter
                     text: pubWin._publishing ? qsTr("Cancelar") : qsTr("Cerrar")
+                    leftPadding: 14; rightPadding: 14; topPadding: 6; bottomPadding: 6
                     onClicked: pubWin.close()
                 }
             }
@@ -1058,11 +1064,13 @@ ApplicationWindow {
             
             Button {
                 text: qsTr("Cancelar")
+                leftPadding: 14; rightPadding: 14; topPadding: 6; bottomPadding: 6
                 onClicked: pubWin.close()
             }
             Button {
                 text: pubWin.editMode ? qsTr("Guardar Cambios") : qsTr("Publicar")
                 highlighted: true
+                leftPadding: 16; rightPadding: 16; topPadding: 7; bottomPadding: 7
                 enabled: true
                 onClicked: pubWin._startPublish()
             }

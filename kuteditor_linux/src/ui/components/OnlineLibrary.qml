@@ -196,6 +196,7 @@ Rectangle {
 
                     Button {
                         text: qsTr("← Volver")
+                        leftPadding: 14; rightPadding: 14; topPadding: 6; bottomPadding: 6
                         onClicked: olib.backToLocal()
                     }
                     Item { Layout.fillWidth: true }
@@ -208,6 +209,7 @@ Rectangle {
                         id: loginBtn
                         text: qsTr("Iniciar sesión")
                         highlighted: true
+                        leftPadding: 16; rightPadding: 16; topPadding: 7; bottomPadding: 7
                         enabled: !KutPod.busy
                               && urlField.text.length > 4
                               && userField.text.length > 0
@@ -254,11 +256,13 @@ Rectangle {
                         }
                         Button {
                             text: qsTr("Refrescar")
+                            leftPadding: 14; rightPadding: 14; topPadding: 6; bottomPadding: 6
                             onClicked: KutPod.fetchPodcasts()
                             enabled: !KutPod.busy
                         }
                         Button {
                             text: qsTr("Cerrar sesión")
+                            leftPadding: 14; rightPadding: 14; topPadding: 6; bottomPadding: 6
                             onClicked: { KutPod.logout(); olibStack.replace(loginPage) }
                         }
                     }
@@ -379,6 +383,7 @@ Rectangle {
                         width: parent.width
                         Button {
                             text: "← " + qsTr("Podcasts")
+                            leftPadding: 14; rightPadding: 14; topPadding: 6; bottomPadding: 6
                             onClicked: { olib.currentPodcast = null; olibStack.pop() }
                         }
                         Label {
@@ -487,6 +492,7 @@ Rectangle {
                                     Button {
                                         text: qsTr("Ver")
                                         flat: true
+                                        leftPadding: 12; rightPadding: 12; topPadding: 6; bottomPadding: 6
                                         ToolTip.visible: hovered
                                         ToolTip.text: qsTr("Abrir episodio en el navegador")
                                         onClicked: {
@@ -501,6 +507,7 @@ Rectangle {
                                     Button {
                                         text: qsTr("Editar")
                                         flat: true
+                                        leftPadding: 12; rightPadding: 12; topPadding: 6; bottomPadding: 6
                                         ToolTip.visible: hovered
                                         ToolTip.text: qsTr("Editar episodio en KutPod")
                                         onClicked: {
@@ -535,6 +542,7 @@ Rectangle {
                         visible: olib.episodesData.pages > 1
                         Button {
                             text: "‹ " + qsTr("Anterior")
+                            leftPadding: 14; rightPadding: 14; topPadding: 6; bottomPadding: 6
                             enabled: olib.episodesData.page > 1 && !KutPod.busy
                             onClicked: KutPod.fetchEpisodes(
                                 String(olib.currentPodcast.id),
@@ -550,6 +558,7 @@ Rectangle {
                         Item { Layout.fillWidth: true }
                         Button {
                             text: qsTr("Siguiente") + " ›"
+                            leftPadding: 14; rightPadding: 14; topPadding: 6; bottomPadding: 6
                             enabled: olib.episodesData.page < olib.episodesData.pages && !KutPod.busy
                             onClicked: KutPod.fetchEpisodes(
                                 String(olib.currentPodcast.id),

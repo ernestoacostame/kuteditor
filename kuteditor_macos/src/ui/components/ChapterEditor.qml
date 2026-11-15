@@ -24,7 +24,7 @@ Window {
 
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: 44
+            Layout.preferredHeight: 48
             color: "#2a2d32"
 
             RowLayout {
@@ -45,6 +45,7 @@ Window {
                 }
                 Button {
                     text: qsTr("+ Añadir en cursor")
+                    leftPadding: 14; rightPadding: 14; topPadding: 6; bottomPadding: 6
                     onClicked: UndoManager.addChapterAtSec(AudioEngine.currentTime)
                 }
             }
@@ -268,7 +269,7 @@ Window {
         // ── Barra inferior ──────────────────────────────────────────
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: 40
+            Layout.preferredHeight: 46
             color: "#2a2d32"
 
             RowLayout {
@@ -278,12 +279,14 @@ Window {
 
                 Button {
                     text: qsTr("Eliminar todos")
+                    leftPadding: 14; rightPadding: 14; topPadding: 6; bottomPadding: 6
                     enabled: ChapterModel.count > 0
                     onClicked: UndoManager.clearChapters()
                 }
                 Item { Layout.fillWidth: true }
                 Button {
                     text: qsTr("Exportar JSON")
+                    leftPadding: 14; rightPadding: 14; topPadding: 6; bottomPadding: 6
                     enabled: ChapterModel.count > 0
                     onClicked: exportJsonDlg.open()
                 }

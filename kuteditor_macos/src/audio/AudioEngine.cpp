@@ -24,6 +24,13 @@
 #include <QMutexLocker>
 #include <cmath>
 #include <cstring>
+#include <chrono>
+
+static qint64 steadyClockNs()
+{
+    return std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count();
+}
 
 AudioEngine::AudioEngine(QObject *parent)
     : QObject(parent)
@@ -80,7 +87,8 @@ AudioEngine::AudioEngine(QObject *parent)
         connect(fx, &MasterEffect::changed, this, &AudioEngine::masterFxChanged);
     }
 
-    m_uiTimer.setInterval(33); // ~30 fps
+    m_uiTimer.setTimerType(Qt::PreciseTimer);
+    m_uiTimer.setInterval(16); // ~60 fps
     connect(&m_uiTimer, &QTimer::timeout, this, &AudioEngine::onUpdateTimer);
 }
 
@@ -175,6 +183,9 @@ void AudioEngine::play()
             m_playheadFrame.store(0, std::memory_order_relaxed);
         }
         m_playStartFrame.store(currentHead, std::memory_order_relaxed);
+        m_mixStartFrame.store(currentHead, std::memory_order_relaxed);
+        m_mixEndFrame.store(currentHead, std::memory_order_relaxed);
+        m_mixCallbackNs.store(steadyClockNs(), std::memory_order_relaxed);
     }
 
     // readMixSegment() lee directamente de los clips sin flatCache,
@@ -337,6 +348,9 @@ void AudioEngine::seekTime(double seconds)
     const double clamped = std::max(0.0, seconds);
     const qint64 newFrame = static_cast<qint64>(clamped * SAMPLE_RATE);
     m_playheadFrame.store(newFrame, std::memory_order_relaxed);
+    m_mixStartFrame.store(newFrame, std::memory_order_relaxed);
+    m_mixEndFrame.store(newFrame, std::memory_order_relaxed);
+    m_mixCallbackNs.store(steadyClockNs(), std::memory_order_relaxed);
     m_currentTime = clamped;
     emit timeChanged();
 }
@@ -799,6 +813,9 @@ void AudioEngine::playbackMix(float *out, int nFrames)
                 break;
             }
         }
+        m_mixStartFrame.store(startFrame, std::memory_order_relaxed);
+        m_mixEndFrame.store(newPlayhead, std::memory_order_relaxed);
+        m_mixCallbackNs.store(steadyClockNs(), std::memory_order_relaxed);
     } else {
         newPlayhead = m_playheadFrame.load(std::memory_order_relaxed);
     }
@@ -841,7 +858,21 @@ void AudioEngine::onUpdateTimer()
 {
     {
         QMutexLocker lock(&m_playbackMutex);
-        m_currentTime = double(m_playheadFrame) / SAMPLE_RATE;
+        if (m_state == State::Playing) {
+            const qint64 startF = m_mixStartFrame.load(std::memory_order_relaxed);
+            const qint64 endF   = m_mixEndFrame.load(std::memory_order_relaxed);
+            const qint64 cbNs   = m_mixCallbackNs.load(std::memory_order_relaxed);
+            if (endF > startF && cbNs > 0) {
+                const double elapsedSec = std::max(0.0, double(steadyClockNs() - cbNs) * 1e-9);
+                const double advanceFrames = elapsedSec * SAMPLE_RATE * double(m_playbackRate);
+                const double interpFrame = std::min(double(endF), double(startF) + advanceFrames);
+                m_currentTime = interpFrame / SAMPLE_RATE;
+            } else {
+                m_currentTime = double(m_playheadFrame.load(std::memory_order_relaxed)) / SAMPLE_RATE;
+            }
+        } else {
+            m_currentTime = double(m_playheadFrame.load(std::memory_order_relaxed)) / SAMPLE_RATE;
+        }
     }
     emit timeChanged();
 

@@ -209,8 +209,8 @@ ApplicationWindow {
                             Label { anchors.centerIn: parent; visible: coverPreview.path===""; text: qsTr("sin\nportada"); color: root.textSec; font.pixelSize: 9; horizontalAlignment: Text.AlignHCenter }
                         }
                         ColumnLayout { spacing: 4
-                            Button { text: qsTr("Elegir…"); onClicked: coverFileDlg.open() }
-                            Button { text: qsTr("Quitar"); enabled: coverPreview.path!==""; onClicked: coverPreview.path="" }
+                            Button { text: qsTr("Elegir…"); leftPadding: 14; rightPadding: 14; topPadding: 6; bottomPadding: 6; onClicked: coverFileDlg.open() }
+                            Button { text: qsTr("Quitar"); leftPadding: 14; rightPadding: 14; topPadding: 6; bottomPadding: 6; enabled: coverPreview.path!==""; onClicked: coverPreview.path="" }
                         }
                         Item { Layout.fillWidth: true }
                     }
@@ -222,9 +222,10 @@ ApplicationWindow {
                 Rectangle { Layout.fillWidth: true; height: 1; color: root.divider }
                 RowLayout { Layout.fillWidth: true
                     Item { Layout.fillWidth: true }
-                    Button { text: qsTr("Cancelar"); onClicked: root.close() }
+                    Button { text: qsTr("Cancelar"); leftPadding: 14; rightPadding: 14; topPadding: 6; bottomPadding: 6; onClicked: root.close() }
                     Button {
                         text: qsTr("Exportar…")
+                        leftPadding: 16; rightPadding: 16; topPadding: 7; bottomPadding: 7
                         highlighted: enabled
                         enabled: !((formatCombo.currentValue === "mp3" || formatCombo.currentValue === "ogg" || formatCombo.currentValue === "flac") && !ExportManager.isFfmpegAvailable())
                         onClicked: {
@@ -270,7 +271,7 @@ ApplicationWindow {
                 Label { visible: root.exportError; text: root.exportErrorMsg; color: "#e74c3c"; font.pixelSize: 10; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                 Rectangle { Layout.fillWidth: true; height: 1; color: root.divider }
                 RowLayout { Layout.fillWidth: true; Item { Layout.fillWidth: true }
-                    Button { text: qsTr("Cerrar"); visible: root.exportDone; onClicked: root.close() }
+                    Button { text: qsTr("Cerrar"); leftPadding: 14; rightPadding: 14; topPadding: 6; bottomPadding: 6; visible: root.exportDone; onClicked: root.close() }
                 }
             }
         }

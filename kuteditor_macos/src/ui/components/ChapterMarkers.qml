@@ -190,13 +190,15 @@ Item {
         id: renamePopup
         modal: true
         property int chapterIdx: -1
-        width: 260; height: 80
+        width: 280; implicitHeight: Math.max(96, renameCol.implicitHeight + 24)
+        height: implicitHeight
         x: (markers.width - width) / 2
         y: 30
 
         background: Rectangle { color: "#2a2d32"; radius: 6; border.color: "#555" }
 
         ColumnLayout {
+            id: renameCol
             anchors.fill: parent
             anchors.margins: 10
             spacing: 8
@@ -218,11 +220,13 @@ Item {
                 Item { Layout.fillWidth: true }
                 Button {
                     text: qsTr("Cancelar")
+                    leftPadding: 14; rightPadding: 14; topPadding: 6; bottomPadding: 6
                     onClicked: renamePopup.close()
                 }
                 Button {
                     text: qsTr("Guardar")
                     highlighted: true
+                    leftPadding: 14; rightPadding: 14; topPadding: 6; bottomPadding: 6
                     onClicked: {
                         UndoManager.renameChapter(renamePopup.chapterIdx, renameField.text)
                         renamePopup.close()
