@@ -1,3 +1,12 @@
+kuteditor (2.74-1) unstable; urgency=medium
+
+  * Movimiento fluido del playhead, ajuste automático de ancho en menús y mejoras de diseño en diálogos y botones.
+  * Envío de la duración del episodio desde el editor al publicar en KutPod.
+  * Resolución de rutas de archivos de portadas en Windows y cambio de vista al crear/abrir proyecto en la biblioteca.
+  * Actualización inmediata de la vista previa de portada del podcast al subir imagen.
+
+ -- KutStudio <soporte@kutstudio.com>  Sun, 15 Nov 2026 18:08:00 -0600
+
 kuteditor (2.73-1) unstable; urgency=medium
 
   * Ventana unificada de Noise Reduction con modos Tiempo Real y Avanzado.
