@@ -1,0 +1,299 @@
+#version 450
+
+/*
+ * peak_vertices.comp — Per-Pixel Peak Extraction + Vertex Generation
+ *
+ * One thread per visible pixel column.  Each thread:
+ *   1. Maps pixel → sample range using viewport params
+ *   2. Selects the best LOD level from the mipmap pyramid
+ *   3. Scans head (raw), body (mipmap blocks), tail (raw) for min/max
+ *   4. Applies gain and envelope
+ *   5. Writes 2 vertices (top, bottom) for the triangle strip
+ *   6. Writes 2 vertices for RMS overlay
+ *   7. Flags clipping columns
+ *
+ * Output vertex layout per column (index i):
+ *   peakVerts[i*2 + 0] = top vertex     (x, y, r, g, b, a)
+ *   peakVerts[i*2 + 1] = bottom vertex  (x, y, r, g, b, a)
+ *   rmsVerts[i*2 + 0]  = top RMS vertex
+ *   rmsVerts[i*2 + 1]  = bottom RMS vertex
+ *
+ * Clip indicator columns are written to clipFlags[i] = 1.
+ */
+
+layout(local_size_x = 256) in;
+
+// Raw audio samples (interleaved float32)
+layout(std430, binding = 0) readonly buffer SamplesIn {
+    float samples[];
+};
+
+// Mipmap levels packed sequentially: level0 peaks, level1 peaks, ...
+layout(std430, binding = 1) readonly buffer MipmapIn {
+    vec2 mipmapPeaks[];  // .x = max, .y = min
+};
+
+// Output: peak triangle strip vertices (6 floats each: x,y, r,g,b,a as floats 0-1)
+layout(std430, binding = 2) writeonly buffer PeakVerts {
+    float peakVerts[];
+};
+
+// Output: RMS triangle strip vertices
+layout(std430, binding = 3) writeonly buffer RmsVerts {
+    float rmsVerts[];
+};
+
+// Output: clip indicator flags (1 per column)
+layout(std430, binding = 4) writeonly buffer ClipFlags {
+    uint clipFlags[];
+};
+
+// Envelope nodes: .x = time (sec from clip start), .y = gain
+layout(std430, binding = 5) readonly buffer EnvelopeIn {
+    vec2 envNodes[];
+};
+
+layout(push_constant) uniform ViewParams {
+    float width;          // Item width in pixels
+    float height;         // Item height in pixels
+    float secPerPx;       // Seconds per pixel column
+    float baseTime;       // clipSourceOffset (seconds)
+    float clipEndTime;    // clipSourceOffset + clipLength (seconds)
+    float sampleRate;     // Audio sample rate
+    float gain;           // Track gain
+    uint  renderStart;    // First pixel column to render
+    uint  renderEnd;      // Last pixel column to render (exclusive)
+    uint  totalFrames;    // Total audio frames
+    uint  channels;       // Audio channels
+    uint  channel;        // Channel to display (0)
+
+    // Mipmap level metadata (up to 6 levels)
+    uint  numLevels;
+    uint  levelOffsets[6];     // Offset into mipmapPeaks[] for each level
+    uint  levelBlockSizes[6];  // Block size (in frames) for each level
+
+    // Colors packed as RGBA8 in uint
+    uint  fillColor;
+    uint  warnColor;
+    uint  clipColor;
+    uint  rmsColor;
+
+    uint  flags;          // bit 0 = unipolar, bit 1 = showRms
+    uint  numEnvNodes;    // Number of envelope nodes
+};
+
+// Unpack RGBA8 from uint to vec4
+vec4 unpackColor(uint packed) {
+    return vec4(
+        float((packed >> 0u)  & 0xFFu) / 255.0,
+        float((packed >> 8u)  & 0xFFu) / 255.0,
+        float((packed >> 16u) & 0xFFu) / 255.0,
+        float((packed >> 24u) & 0xFFu) / 255.0
+    );
+}
+
+// Write a vertex (6 floats) at the given index
+void writeVertex(uint bufferOffset, float x, float y, vec4 col) {
+    peakVerts[bufferOffset + 0u] = x;
+    peakVerts[bufferOffset + 1u] = y;
+    peakVerts[bufferOffset + 2u] = col.r;
+    peakVerts[bufferOffset + 3u] = col.g;
+    peakVerts[bufferOffset + 4u] = col.b;
+    peakVerts[bufferOffset + 5u] = col.a;
+}
+
+void writeRmsVertex(uint bufferOffset, float x, float y, vec4 col) {
+    rmsVerts[bufferOffset + 0u] = x;
+    rmsVerts[bufferOffset + 1u] = y;
+    rmsVerts[bufferOffset + 2u] = col.r;
+    rmsVerts[bufferOffset + 3u] = col.g;
+    rmsVerts[bufferOffset + 4u] = col.b;
+    rmsVerts[bufferOffset + 5u] = col.a;
+}
+
+// Get raw peak from samples in [startFrame, endFrame)
+vec2 getRawPeak(uint startFrame, uint endFrame) {
+    float mx = -2.0;
+    float mn =  2.0;
+    for (uint f = startFrame; f < endFrame && f < totalFrames; ++f) {
+        float v = samples[f * channels + channel];
+        mx = max(mx, v);
+        mn = min(mn, v);
+    }
+    if (mx < -1.0) mx = 0.0;
+    if (mn >  1.0) mn = 0.0;
+    return vec2(mx, mn);
+}
+
+// Envelope interpolation
+float envelopeGainAt(float t) {
+    if (numEnvNodes == 0u) return 1.0;
+
+    vec2 first = envNodes[0];
+    vec2 last  = envNodes[numEnvNodes - 1u];
+
+    if (t <= first.x) return first.y;
+    if (t >= last.x)  return last.y;
+
+    for (uint i = 0u; i < numEnvNodes - 1u; ++i) {
+        vec2 a = envNodes[i];
+        vec2 b = envNodes[i + 1u];
+        if (t >= a.x && t <= b.x) {
+            float dx = b.x - a.x;
+            if (dx < 1e-8) return a.y;
+            float frac = (t - a.x) / dx;
+            return mix(a.y, b.y, frac);
+        }
+    }
+    return last.y;
+}
+
+void main() {
+    uint col = gl_GlobalInvocationID.x;
+    uint numCols = renderEnd - renderStart;
+
+    if (col > numCols) return;
+
+    uint px = renderStart + col;
+    float pxF = float(px);
+    float h = height;
+    bool isUnipolar = (flags & 1u) != 0u;
+    bool showRms    = (flags & 2u) != 0u;
+    float midY = h * 0.5;
+
+    // Per-vertex output index (6 floats per vertex, 2 vertices per column)
+    uint peakBase = col * 2u * 6u;
+    uint rmsBase  = col * 2u * 6u;
+
+    // Default: transparent
+    vec4 transparent = vec4(0.0, 0.0, 0.0, 0.0);
+    writeVertex(peakBase,      pxF, h, transparent);
+    writeVertex(peakBase + 6u, pxF, h, transparent);
+    if (showRms) {
+        writeRmsVertex(rmsBase,      pxF, h, transparent);
+        writeRmsVertex(rmsBase + 6u, pxF, h, transparent);
+    }
+    clipFlags[col] = 0u;
+
+    // Map pixel to time
+    float t0 = baseTime + pxF * secPerPx;
+    float t1 = baseTime + (pxF + 1.0) * secPerPx;
+
+    if (t0 >= clipEndTime) return;
+
+    // Map time to sample frames
+    float sf0 = t0 * sampleRate;
+    float sf1 = t1 * sampleRate;
+    uint sS = uint(max(sf0, 0.0));
+    uint sE = max(sS + 1u, uint(ceil(sf1)));
+    if (sE > totalFrames) sE = totalFrames;
+
+    uint range = sE - sS;
+    if (range == 0u) return;
+
+    // ---- Select best LOD level ----
+    int bestLevel = -1;
+    for (int i = int(numLevels) - 1; i >= 0; --i) {
+        if (levelBlockSizes[i] <= range / 2u) {
+            bestLevel = i;
+            break;
+        }
+    }
+
+    vec2 peak;
+    if (bestLevel == -1) {
+        // Range smaller than finest mipmap block: use raw samples
+        peak = getRawPeak(sS, sE);
+    } else {
+        // Three-phase scan: head (raw) + body (mipmap) + tail (raw)
+        uint bs = levelBlockSizes[bestLevel];
+        uint levelOff = levelOffsets[bestLevel];
+
+        uint firstFullBlock = (sS + bs - 1u) / bs;
+        uint lastFullBlock  = sE / bs;
+
+        float mx = -2.0;
+        float mn =  2.0;
+
+        // Head: raw samples [sS, firstFullBlock * bs)
+        if (firstFullBlock * bs > sS) {
+            uint headEnd = min(firstFullBlock * bs, sE);
+            vec2 hp = getRawPeak(sS, headEnd);
+            mx = max(mx, hp.x);
+            mn = min(mn, hp.y);
+        }
+
+        // Body: mipmap blocks [firstFullBlock, lastFullBlock)
+        for (uint b = firstFullBlock; b < lastFullBlock; ++b) {
+            vec2 bp = mipmapPeaks[levelOff + b];
+            mx = max(mx, bp.x);
+            mn = min(mn, bp.y);
+        }
+
+        // Tail: raw samples [lastFullBlock * bs, sE)
+        if (lastFullBlock * bs < sE && lastFullBlock >= firstFullBlock) {
+            uint tailStart = lastFullBlock * bs;
+            vec2 tp = getRawPeak(tailStart, sE);
+            mx = max(mx, tp.x);
+            mn = min(mn, tp.y);
+        }
+
+        if (mx < -1.0) mx = 0.0;
+        if (mn >  1.0) mn = 0.0;
+        peak = vec2(mx, mn);
+    }
+
+    // Apply gain and envelope
+    float g = gain;
+    if (numEnvNodes > 0u) {
+        g *= envelopeGainAt(t0 - baseTime);
+    }
+
+    float maxA = clamp(peak.x * g, -1.0, 1.0);
+    float minA = clamp(peak.y * g, -1.0, 1.0);
+    float absMax = max(abs(maxA), abs(minA));
+
+    // Clipping detection
+    bool isClipping = (abs(peak.x * g) > 0.99 || abs(peak.y * g) > 0.99);
+    if (isClipping) clipFlags[col] = 1u;
+
+    // Color selection
+    vec4 col4 = unpackColor(fillColor);
+    if (absMax > 0.95) col4 = unpackColor(clipColor);
+    else if (absMax > 0.70) col4 = unpackColor(warnColor);
+
+    // Vertex positions
+    float yTop, yBot;
+    if (isUnipolar) {
+        yTop = h - (absMax * h);
+        yBot = h;
+        if (yBot - yTop < 2.0) yTop = h - 2.0;
+    } else {
+        yTop = midY - (maxA * midY);
+        yBot = midY - (minA * midY);
+        if (abs(yTop - yBot) < 2.0) { yTop = midY - 1.0; yBot = midY + 1.0; }
+    }
+
+    writeVertex(peakBase,      pxF, yTop, col4);
+    writeVertex(peakBase + 6u, pxF, yBot, col4);
+
+    // RMS overlay
+    if (showRms) {
+        float rmsApprox = absMax * 0.65;
+        float rTop, rBot;
+        vec4 rmsCol = unpackColor(rmsColor);
+
+        if (isUnipolar) {
+            rTop = h - (rmsApprox * h);
+            rBot = h;
+            if (rBot - rTop < 1.0) rTop = h - 1.0;
+        } else {
+            rTop = midY - (rmsApprox * midY);
+            rBot = midY + (rmsApprox * midY);
+            if (abs(rTop - rBot) < 1.0) { rTop = midY - 0.5; rBot = midY + 0.5; }
+        }
+
+        writeRmsVertex(rmsBase,      pxF, rTop, rmsCol);
+        writeRmsVertex(rmsBase + 6u, pxF, rBot, rmsCol);
+    }
+}

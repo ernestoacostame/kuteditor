@@ -6,6 +6,12 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${SCRIPT_DIR}/build"
 
+# Aislar variables de entorno para compilación nativa Apple Silicon (ARM64)
+unset QT_PREFIX INTEL_DEPS_PREFIX
+export PATH="/opt/homebrew/opt/qt/bin:/opt/homebrew/bin:${PATH}"
+export PKG_CONFIG_PATH="/opt/homebrew/lib/pkgconfig:/opt/homebrew/share/pkgconfig"
+export CMAKE_PREFIX_PATH="/opt/homebrew/opt/qt:/opt/homebrew"
+
 # Obtener la versión desde CMakeLists.txt
 VERSION=$(grep -o 'set(CPACK_PACKAGE_VERSION "[^"]*")' "${SCRIPT_DIR}/CMakeLists.txt" | cut -d'"' -f2)
 if [ -z "${VERSION}" ]; then
