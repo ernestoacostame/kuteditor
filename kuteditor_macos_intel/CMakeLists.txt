@@ -13,6 +13,11 @@ set(CMAKE_AUTOMOC ON)
 # ---------------------------------------------------------------------------
 # Qt6 (obligatorio)
 # ---------------------------------------------------------------------------
+# macOS 26+ SDK eliminó AGL.framework, pero CMake puede detectar la ruta del sistema
+# y pasar -framework AGL al linker (fallando en ld). Forzar OpenGL evita el error.
+if(APPLE)
+    set(WrapOpenGL_AGL "-framework OpenGL" CACHE FILEPATH "Fallback for missing AGL.framework in newer macOS SDKs" FORCE)
+endif()
 set(QT_NO_PRIVATE_MODULE_WARNING ON)
 find_package(Qt6 6.7 REQUIRED COMPONENTS
     Core
