@@ -1,3 +1,11 @@
+kuteditor (2.75-1) unstable; urgency=medium
+
+  * Corrección de parámetros de exportación en ffmpeg (eliminado -channel_layout obsoleto y -map 1:v en OGG).
+  * Envío de temporada (disc) y episodio (>0) en metadatos de exportación.
+  * Limpieza de archivos temporales de capítulos en errores y rutas Windows (file:///C:/...).
+
+ -- KutStudio <soporte@kutstudio.com>  Tue, 24 Nov 2026 00:50:00 -0600
+
 kuteditor (2.74-1) unstable; urgency=medium
 
   * Movimiento fluido del playhead, ajuste automático de ancho en menús y mejoras de diseño en diálogos y botones.

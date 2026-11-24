@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
-project(kuteditor VERSION 2.74 LANGUAGES C CXX)
-set(CPACK_PACKAGE_VERSION "2.74")
+project(kuteditor VERSION 2.75 LANGUAGES C CXX)
+set(CPACK_PACKAGE_VERSION "2.75")
 
 set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum macOS version (Big Sur)" FORCE)
 set(CMAKE_OSX_ARCHITECTURES "x86_64" CACHE STRING "Target macOS architecture (Intel)" FORCE)

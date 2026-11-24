@@ -710,17 +710,15 @@ bool ExportManager::exportViaFfmpeg(const QString &filePath, const QVector<float
     }
 
     const QString coverPath = metadata.value("coverPath").toString().trimmed();
-    // M4A/iPod no soporta imagen embebida via video stream en ffmpeg.
-    // Solo MP3, OGG y FLAC soportan portada via -map.
+    // Solo MP3 y FLAC soportan portada via -map 1:v en ffmpeg (M4A/iPod y OGG Vorbis no).
     const bool hasCover = !coverPath.isEmpty() && QFileInfo(coverPath).isFile()
-                          && (format == "mp3" || format == "flac" || format == "ogg");
+                          && (format == "mp3" || format == "flac");
 
     QStringList args;
     args << "-hide_banner" << "-y"
          << "-f" << "f32le"
          << "-ar" << QString::number(sampleRate)
          << "-ac" << QString::number(channels)
-         << "-channel_layout" << (channels == 2 ? "stereo" : "mono")
          << "-i" << "-";
 
     if (hasCover) {
@@ -792,6 +790,7 @@ bool ExportManager::exportViaFfmpeg(const QString &filePath, const QVector<float
     addMeta("genre",   "genre");
     addMeta("year",    "date");
     addMeta("track",   "track");
+    addMeta("disc",    "disc");
 
     // Mapeo si hay portada: input 0 = audio, input 1 = imagen.
     // Mapeamos audio del primero y video (imagen) del segundo. Sin -c:v:
@@ -833,6 +832,7 @@ bool ExportManager::exportViaFfmpeg(const QString &filePath, const QVector<float
         args << "-c:a" << "aac" << "-b:a" << "192k";
     } else {
         m_lastError = tr("Formato no soportado: %1").arg(format);
+        delete chapterMetaFile;
         return false;
     }
 
@@ -846,6 +846,7 @@ bool ExportManager::exportViaFfmpeg(const QString &filePath, const QVector<float
     ff.start(ffmpegPath, args);
     if (!ff.waitForStarted(5000)) {
         m_lastError = tr("No se pudo iniciar ffmpeg: %1").arg(ff.errorString());
+        delete chapterMetaFile;
         return false;
     }
 
@@ -861,6 +862,7 @@ bool ExportManager::exportViaFfmpeg(const QString &filePath, const QVector<float
             m_lastError = tr("Error escribiendo a ffmpeg: %1").arg(ff.errorString());
             ff.kill();
             ff.waitForFinished(2000);
+            delete chapterMetaFile;
             return false;
         }
         written += w;
@@ -872,6 +874,7 @@ bool ExportManager::exportViaFfmpeg(const QString &filePath, const QVector<float
     if (!ff.waitForFinished(60000)) {
         m_lastError = tr("ffmpeg no terminó a tiempo");
         ff.kill();
+        delete chapterMetaFile;
         return false;
     }
     const QString out = QString::fromUtf8(ff.readAll());

@@ -101,7 +101,7 @@ ApplicationWindow {
         }
         currentFile: root.lastExportPath ? ("file://" + root.lastExportPath) : ""
         onAccepted: {
-            var path = selectedFile.toString().replace(/^file:\/\//, "")
+            var path = selectedFile.toString().replace(/^file:\/\/\/([A-Za-z]:)/, "$1").replace(/^file:\/\//, "")
             root.lastExportPath = path
             root._doExport(path)
         }
@@ -217,7 +217,7 @@ ApplicationWindow {
                 }
                 FileDialog { id: coverFileDlg; title: qsTr("Portada"); fileMode: FileDialog.OpenFile
                     nameFilters: [qsTr("Imágenes (*.jpg *.jpeg *.png)")]
-                    onAccepted: coverPreview.path = selectedFile.toString().replace(/^file:\/\//, "")
+                    onAccepted: coverPreview.path = selectedFile.toString().replace(/^file:\/\/\/([A-Za-z]:)/, "$1").replace(/^file:\/\//, "")
                 }
                 Rectangle { Layout.fillWidth: true; height: 1; color: root.divider }
                 RowLayout { Layout.fillWidth: true
@@ -283,7 +283,9 @@ ApplicationWindow {
         ProjectIO.metadata = md
         var opts = { format: formatCombo.currentValue, sampleRate: sampleRateCombo.currentValue, bitDepth: bitDepthCombo.currentValue }
         if (normalizeCheck.checked) opts.normalizeLUFS = lufsPreset.currentValue
-        opts.metadata = { title: md.title, artist: md.podcaster, album: md.podcast, comment: md.description, track: String(md.episode) }
+        opts.metadata = { title: md.title, artist: md.podcaster, album: md.podcast, comment: md.description }
+        if (md.episode > 0) opts.metadata.track = String(md.episode)
+        if (md.season > 0) opts.metadata.disc = String(md.season)
         if (coverPreview.path) opts.metadata.coverPath = coverPreview.path
 
         exportFilePath = path; isExporting = true; exportDone = false; exportError = false
