@@ -2621,13 +2621,24 @@ ApplicationWindow {
         // crea una pista nueva e importa. Los DropAreas de cada pista
         // tienen z mayor y se llevan el evento si cae dentro de una pista.
         DropArea {
+            id: globalDropArea
             anchors.fill: parent
             property bool hovering: false
             onEntered: (drag) => {
                 console.log("[DropArea:Global] onEntered hasUrls=" + drag.hasUrls
                             + " hasText=" + drag.hasText
                             + " formats=" + drag.formats)
-                if (drag.hasUrls) hovering = true
+                if (drag.hasUrls) {
+                    hovering = true
+                    drag.acceptProposedAction()
+                } else {
+                    drag.accepted = false
+                }
+            }
+            onPositionChanged: (drag) => {
+                if (drag.hasUrls) {
+                    drag.acceptProposedAction()
+                }
             }
             onExited: { hovering = false; console.log("[DropArea:Global] onExited") }
             onDropped: (drop) => {
@@ -2643,8 +2654,17 @@ ApplicationWindow {
                         console.warn("[Drop] Falló la importación de:", path)
                     }
                 }
-                drop.accept()
+                drop.acceptProposedAction()
             }
+        }
+
+        Rectangle {
+            anchors.fill: parent
+            color: Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.08)
+            border.color: root.accent
+            border.width: 2
+            visible: globalDropArea.hovering
+            z: 50
         }
 
         // Ruler: barra horizontal superior para seleccionar y seekear

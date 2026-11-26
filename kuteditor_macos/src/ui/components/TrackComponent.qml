@@ -1049,7 +1049,17 @@ Rectangle {
                 console.log("[DropArea:Track] onEntered hasUrls=" + drag.hasUrls
                             + " hasText=" + drag.hasText
                             + " formats=" + drag.formats)
-                if (drag.hasUrls) hovering = true
+                if (drag.hasUrls) {
+                    hovering = true
+                    drag.acceptProposedAction()
+                } else {
+                    drag.accepted = false
+                }
+            }
+            onPositionChanged: (drag) => {
+                if (drag.hasUrls) {
+                    drag.acceptProposedAction()
+                }
             }
             onExited: { hovering = false; console.log("[DropArea:Track] onExited") }
             onDropped: (drop) => {
@@ -1073,7 +1083,7 @@ Rectangle {
                         imported++
                     }
                 }
-                drop.accept()
+                drop.acceptProposedAction()
             }
         }
 
@@ -1258,6 +1268,7 @@ Rectangle {
                                     const sr = clipRect.clipSampleRate
                                     clipRect.liveLengthSec = samples / sr
                                     clipRect.liveLengthFrame = samples
+                                    waveCanvas.update()
                                 }
                             }
                         }
